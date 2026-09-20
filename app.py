@@ -185,7 +185,7 @@ def login():
             session['username'] = username
             return redirect(url_for('dashboard'))
         flash('Invalid username or password')
-    return render_template('login.html')
+    return render_template('login.html', allow_register=not any_user())
 
 
 @app.route('/logout')
