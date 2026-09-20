@@ -15,6 +15,7 @@
                     <option value="text">Type a key or passphrase</option>
                     <option value="file">Upload a key file</option>
                 </select>
+                <p class="form-text text-muted" id="key_source_desc"></p>
             </div>
             <div class="mb-3" id="keytext">
                 <label class="form-label">Key or Passphrase</label>
@@ -29,10 +30,15 @@
     </div>
 </div>
 <script>
+const keySourceDescs = {
+    text: 'Enter the passphrase or key that was used to encrypt the file.',
+    file: 'Upload the exact key file that was downloaded after encryption.'
+};
 function toggleKey() {
     const src = document.getElementById('ksrc').value;
     document.getElementById('keytext').style.display = src === 'text' ? 'block' : 'none';
     document.getElementById('keyfile').style.display = src === 'file' ? 'block' : 'none';
+    document.getElementById('key_source_desc').textContent = keySourceDescs[src] || '';
 }
 toggleKey();
 </script>

@@ -15,6 +15,7 @@
                     <option value="saved">Use saved private key</option>
                     <option value="file">Upload private key file</option>
                 </select>
+                <p class="form-text text-muted" id="key_source_desc"></p>
             </div>
             <div class="mb-3" id="savedkey">
                 <label class="form-label">Saved Private Key</label>
@@ -33,10 +34,15 @@
     </div>
 </div>
 <script>
+const keySourceDescs = {
+    saved: 'Choose the private key that matches the public key used for encryption.',
+    file: 'Upload the matching private key file from your computer.'
+};
 function toggleKey() {
     const src = document.getElementById('ksrc').value;
     document.getElementById('savedkey').style.display = src === 'saved' ? 'block' : 'none';
     document.getElementById('keyfile').style.display = src === 'file' ? 'block' : 'none';
+    document.getElementById('key_source_desc').textContent = keySourceDescs[src] || '';
 }
 toggleKey();
 </script>

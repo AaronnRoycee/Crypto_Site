@@ -16,19 +16,23 @@
                         <option value="AES">AES</option>
                         <option value="3DES">3DES</option>
                     </select>
+                    <p class="form-text text-muted" id="algo_desc"></p>
                 </div>
                 <div class="col-md-4 mb-3">
                     <label class="form-label">Key Size</label>
                     <select name="key_size" id="size" class="form-select"></select>
+                    <p class="form-text text-muted" id="size_desc"></p>
                 </div>
                 <div class="col-md-4 mb-3">
                     <label class="form-label">Mode</label>
                     <select name="mode" id="mode" class="form-select"></select>
+                    <p class="form-text text-muted" id="mode_desc"></p>
                 </div>
             </div>
             <div class="mb-3">
                 <label class="form-label">IV (optional 32-bit number, 0-4294967295)</label>
                 <input type="number" name="iv" class="form-control" min="0" max="4294967295">
+                <p class="form-text text-muted">A random value that makes the same key produce different output each time. Leave blank for a fully random one.</p>
             </div>
             <div class="mb-3">
                 <label class="form-label">Key Source</label>
@@ -38,6 +42,7 @@
                     <option value="text">Type a key or passphrase</option>
                     <option value="file">Upload a key file</option>
                 </select>
+                <p class="form-text text-muted" id="key_source_desc"></p>
             </div>
             <div class="mb-3" id="keytext" style="display:none">
                 <label class="form-label">Key or Passphrase</label>
@@ -60,6 +65,36 @@ const options = {
     AES: { sizes: [[16,'128 bits'],[24,'192 bits'],[32,'256 bits']], modes: ['CBC','GCM'] },
     '3DES': { sizes: [[24,'192 bits']], modes: ['CBC','CFB'] }
 };
+const algoDescs = {
+    AES: 'The Advanced Encryption Standard. A widely trusted modern cipher.',
+    '3DES': 'Triple DES. An older cipher that runs DES three times for extra security.'
+};
+const sizeDescs = {
+    AES: {
+        16: '128-bit key. The fastest AES option, still considered secure for most uses.',
+        24: '192-bit key. A balanced choice between speed and strength.',
+        32: '256-bit key. The strongest standard AES option.'
+    },
+    '3DES': {
+        24: '192-bit key. The required key length for Triple DES.'
+    }
+};
+const modeDescs = {
+    AES: {
+        CBC: 'Cipher Block Chaining. Each block depends on the previous one, hiding repeated patterns.',
+        GCM: 'Galois/Counter Mode. Encrypts and adds authentication so tampering can be detected.'
+    },
+    '3DES': {
+        CBC: 'Cipher Block Chaining. Each block is mixed with the previous one.',
+        CFB: 'Cipher Feedback. Turns the block cipher into a stream-style cipher.'
+    }
+};
+const keySourceDescs = {
+    'generate-key': 'The site will create a random secret key file you can download after encryption.',
+    'generate-passphrase': 'The site will create a random password and convert it into a strong key.',
+    'text': 'Type your own key or passphrase. Longer passwords are stronger.',
+    'file': 'Use a key file you already have, such as one downloaded from this site.'
+};
 function updateSizes() {
     const algo = document.getElementById('algo').value;
     const sizeSel = document.getElementById('size');
@@ -69,13 +104,27 @@ function updateSizes() {
     options[algo].sizes.forEach(s => sizeSel.add(new Option(s[1], s[0])));
     options[algo].modes.forEach(m => modeSel.add(new Option(m, m)));
     if (algo === 'AES') sizeSel.value = '24';
+    updateDescs();
+}
+function updateDescs() {
+    const algo = document.getElementById('algo').value;
+    const size = parseInt(document.getElementById('size').value);
+    const mode = document.getElementById('mode').value;
+    const ksrc = document.getElementById('ksrc').value;
+    document.getElementById('algo_desc').textContent = algoDescs[algo] || '';
+    document.getElementById('size_desc').textContent = (sizeDescs[algo] || {})[size] || '';
+    document.getElementById('mode_desc').textContent = (modeDescs[algo] || {})[mode] || '';
+    document.getElementById('key_source_desc').textContent = keySourceDescs[ksrc] || '';
 }
 function toggleKey() {
     const src = document.getElementById('ksrc').value;
     document.getElementById('keytext').style.display = src === 'text' ? 'block' : 'none';
     document.getElementById('keyfile').style.display = src === 'file' ? 'block' : 'none';
     document.getElementById('keymsg').style.display = (src === 'generate-key' || src === 'generate-passphrase') ? 'block' : 'none';
+    updateDescs();
 }
+document.getElementById('size').addEventListener('change', updateDescs);
+document.getElementById('mode').addEventListener('change', updateDescs);
 updateSizes();
 toggleKey();
 </script>
