@@ -17,6 +17,15 @@
                 <ul class="navbar-nav me-auto">
                     {% if 'username' in session %}
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a></li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="cryptoDropdown" role="button" data-bs-toggle="dropdown">Crypto</a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('encrypt_symmetric') }}">Symmetric Encrypt</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('decrypt_symmetric') }}">Symmetric Decrypt</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('encrypt_asymmetric') }}">Asymmetric Encrypt</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('decrypt_asymmetric') }}">Asymmetric Decrypt</a></li>
+                        </ul>
+                    </li>
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('files') }}">Files</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('keys') }}">Keys</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('hash_file') }}">Hash</a></li>

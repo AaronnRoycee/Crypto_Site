@@ -133,6 +133,24 @@ def save_key(d, name, data):
     return str(target.relative_to(KEYS_DIR)), target.name
 
 
+def save_key_record(username, name, data, key_type):
+    d = user_key_dir(username)
+    target = d / secure_filename(name)
+    i = 1
+    stem = target.stem
+    suffix = target.suffix
+    while target.exists():
+        target = d / secure_filename(f"{stem}_{i}{suffix}")
+        i += 1
+    target.write_bytes(data)
+    rel = str(target.relative_to(KEYS_DIR))
+    db = get_db()
+    db.execute('INSERT INTO keys (username, name, key_type, stored_name, created_at) VALUES (?, ?, ?, ?, ?)',
+               (username, name, key_type, rel, now()))
+    db.commit()
+    return db.execute('SELECT id FROM keys WHERE stored_name = ?', (rel,)).fetchone()['id']
+
+
 def generate_password(length=16, upper=True, lower=True, digits=True, special=True):
     alphabet = ''
     if upper:
@@ -158,8 +176,8 @@ def build_iv(iv_text, length):
     return prefix + os.urandom(length - 4)
 
 
-def derive_or_use_key(key_data, key_size):
-    if len(key_data) == key_size:
+def derive_or_use_key(key_data, key_size, force_kdf=False):
+    if not force_kdf and len(key_data) == key_size:
         return key_data, None
     salt = os.urandom(16)
     kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=key_size, salt=salt, iterations=100000)
@@ -456,20 +474,32 @@ def view_key(key_id):
     if not p.exists():
         abort(404)
     data = p.read_bytes()
-    if row['key_type'].endswith('Private') or row['key_type'].endswith('Public'):
+    if row['key_type'].endswith('Private') or row['key_type'].endswith('Public') or row['key_type'] == 'Passphrase' or row['stored_name'].endswith('.txt'):
         content = data.decode()
     else:
         content = base64.b64encode(data).decode()
     return render_template('view_key.html', key=row, content=content)
 
 
+@app.route('/encrypt/result')
+@login_required
+def encrypt_result():
+    file_id = request.args.get('file_id', type=int)
+    key_id = request.args.get('key_id', type=int)
+    if not file_id:
+        abort(404)
+    file_row = get_db().execute('SELECT * FROM files WHERE id = ? AND username = ?', (file_id, session['username'])).fetchone()
+    if not file_row:
+        abort(404)
+    key_row = get_db().execute('SELECT * FROM keys WHERE id = ? AND username = ?', (key_id, session['username'])).fetchone()
+    return render_template('encrypt_result.html', file=file_row, key=key_row)
+
+
 @app.route('/encrypt/symmetric', methods=['GET', 'POST'])
 @login_required
 def encrypt_symmetric():
     if request.method == 'GET':
-        user_keys = get_db().execute('SELECT * FROM keys WHERE username = ? AND key_type IN (?, ?, ?, ?)',
-                                     (session['username'], 'AES-128', 'AES-192', 'AES-256', '3DES')).fetchall()
-        return render_template('encrypt_sym.html', keys=user_keys)
+        return render_template('encrypt_sym.html')
     if 'file' not in request.files:
         flash('No file selected')
         return redirect(url_for('encrypt_symmetric'))
@@ -483,17 +513,44 @@ def encrypt_symmetric():
     iv_text = request.form.get('iv', '').strip()
     key_source = request.form.get('key_source', '')
     key_data = b''
-    if key_source == 'file':
-        if 'key_file' not in request.files or request.files['key_file'].filename == '':
-            flash('Key file required')
+    force_kdf = True
+    key_id = None
+    base = secure_filename(f.filename)
+    if key_source == 'generate-key':
+        if algorithm == 'AES':
+            if key_size not in (16, 24, 32):
+                flash('Invalid AES key size')
+                return redirect(url_for('encrypt_symmetric'))
+            key_data = os.urandom(key_size)
+            key_id = save_key_record(session['username'], f"{base}.key", key_data, f'AES-{key_size * 8}')
+        elif algorithm == '3DES':
+            key_data = os.urandom(24)
+            key_id = save_key_record(session['username'], f"{base}.key", key_data, '3DES')
+        else:
+            flash('Unknown algorithm')
             return redirect(url_for('encrypt_symmetric'))
-        key_data = request.files['key_file'].read()
-    else:
+        force_kdf = False
+    elif key_source == 'generate-passphrase':
+        key_data = generate_password(32, True, True, True, True).encode()
+        key_id = save_key_record(session['username'], f"{base}_passphrase.txt", key_data, 'Passphrase')
+    elif key_source == 'text':
         key_text = request.form.get('key_text', '')
         if not key_text:
             flash('Key text required')
             return redirect(url_for('encrypt_symmetric'))
         key_data = key_text.encode()
+        key_id = save_key_record(session['username'], f"{base}_passphrase.txt", key_data, 'Passphrase')
+    elif key_source == 'file':
+        if 'key_file' not in request.files or request.files['key_file'].filename == '':
+            flash('Key file required')
+            return redirect(url_for('encrypt_symmetric'))
+        key_file = request.files['key_file']
+        key_data = key_file.read()
+        key_id = save_key_record(session['username'], key_file.filename, key_data, 'Uploaded-Key')
+        force_kdf = False
+    else:
+        flash('Key source required')
+        return redirect(url_for('encrypt_symmetric'))
     plaintext = f.read()
     try:
         if algorithm == 'AES':
@@ -502,7 +559,7 @@ def encrypt_symmetric():
                 return redirect(url_for('encrypt_symmetric'))
             if mode == 'CBC':
                 iv = build_iv(iv_text, 16)
-                key, salt = derive_or_use_key(key_data, key_size)
+                key, salt = derive_or_use_key(key_data, key_size, force_kdf)
                 padder = sym_padding.PKCS7(128).padder()
                 padded = padder.update(plaintext) + padder.finalize()
                 enc = Cipher(algorithms.AES(key), modes.CBC(iv)).encryptor()
@@ -512,7 +569,7 @@ def encrypt_symmetric():
                 tag_b64 = None
             elif mode == 'GCM':
                 iv = build_iv(iv_text, 12)
-                key, salt = derive_or_use_key(key_data, key_size)
+                key, salt = derive_or_use_key(key_data, key_size, force_kdf)
                 enc = Cipher(algorithms.AES(key), modes.GCM(iv)).encryptor()
                 ct = enc.update(plaintext) + enc.finalize()
                 iv_b64 = base64.b64encode(iv).decode()
@@ -527,7 +584,7 @@ def encrypt_symmetric():
                 return redirect(url_for('encrypt_symmetric'))
             if mode == 'CBC':
                 iv = build_iv(iv_text, 8)
-                key, salt = derive_or_use_key(key_data, 24)
+                key, salt = derive_or_use_key(key_data, 24, force_kdf)
                 padder = sym_padding.PKCS7(64).padder()
                 padded = padder.update(plaintext) + padder.finalize()
                 enc = Cipher(TripleDES(key), modes.CBC(iv)).encryptor()
@@ -537,7 +594,7 @@ def encrypt_symmetric():
                 tag_b64 = None
             elif mode == 'CFB':
                 iv = build_iv(iv_text, 8)
-                key, salt = derive_or_use_key(key_data, 24)
+                key, salt = derive_or_use_key(key_data, 24, force_kdf)
                 enc = Cipher(TripleDES(key), decrepit_modes.CFB(iv)).encryptor()
                 ct = enc.update(plaintext) + enc.finalize()
                 iv_b64 = base64.b64encode(iv).decode()
@@ -564,12 +621,13 @@ def encrypt_symmetric():
     }
     out_bytes = json.dumps(out, indent=2).encode()
     d = user_file_dir(session['username'])
-    rel, name = save_file(d, f"{secure_filename(f.filename)}.enc", out_bytes)
-    get_db().execute('INSERT INTO files (username, filename, stored_name, uploaded_at) VALUES (?, ?, ?, ?)',
-                     (session['username'], name, rel, now()))
-    get_db().commit()
-    flash('File encrypted')
-    return redirect(url_for('files'))
+    rel, name = save_file(d, f"{base}.enc", out_bytes)
+    db = get_db()
+    db.execute('INSERT INTO files (username, filename, stored_name, uploaded_at) VALUES (?, ?, ?, ?)',
+               (session['username'], name, rel, now()))
+    db.commit()
+    file_id = db.execute('SELECT id FROM files WHERE stored_name = ?', (rel,)).fetchone()['id']
+    return redirect(url_for('encrypt_result', file_id=file_id, key_id=key_id))
 
 
 @app.route('/decrypt/symmetric', methods=['GET', 'POST'])

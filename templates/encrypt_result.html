@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Encryption Complete</h2>
+<p class="text-muted">Download the encrypted file and the key or passphrase used. Both are needed to decrypt.</p>
+<div class="card shadow">
+    <div class="card-body">
+        <h5 class="card-title">Encrypted File</h5>
+        <p class="card-text">{{ file.filename }}</p>
+        <a href="{{ url_for('download_file', file_id=file.id) }}" class="btn btn-success mb-4">Download Encrypted File</a>
+        {% if key %}
+        <h5 class="card-title">Key / Passphrase</h5>
+        <p class="card-text">{{ key.name }}</p>
+        <a href="{{ url_for('view_key', key_id=key.id) }}" class="btn btn-info">View Key</a>
+        <a href="{{ url_for('download_key', key_id=key.id) }}" class="btn btn-primary">Download Key</a>
+        {% endif %}
+        <hr>
+        <a href="{{ url_for('decrypt_symmetric') }}" class="btn btn-secondary">Go to Decrypt</a>
+    </div>
+</div>
+{% endblock %}

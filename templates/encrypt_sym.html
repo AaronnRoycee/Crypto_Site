@@ -33,11 +33,13 @@
             <div class="mb-3">
                 <label class="form-label">Key Source</label>
                 <select name="key_source" id="ksrc" class="form-select" onchange="toggleKey()">
+                    <option value="generate-key">Generate a random key</option>
+                    <option value="generate-passphrase">Generate a random passphrase</option>
                     <option value="text">Type a key or passphrase</option>
                     <option value="file">Upload a key file</option>
                 </select>
             </div>
-            <div class="mb-3" id="keytext">
+            <div class="mb-3" id="keytext" style="display:none">
                 <label class="form-label">Key or Passphrase</label>
                 <input type="text" name="key_text" class="form-control">
             </div>
@@ -45,6 +47,9 @@
                 <label class="form-label">Key File</label>
                 <input type="file" name="key_file" class="form-control">
                 <small class="form-text text-muted">Upload an exact-length key, or any file used as a passphrase.</small>
+            </div>
+            <div class="mb-3" id="keymsg" style="display:none">
+                <p class="text-muted">A key will be generated and saved for you. You can download it after encryption.</p>
             </div>
             <button type="submit" class="btn btn-primary">Encrypt and Save</button>
         </form>
@@ -68,7 +73,9 @@ function toggleKey() {
     const src = document.getElementById('ksrc').value;
     document.getElementById('keytext').style.display = src === 'text' ? 'block' : 'none';
     document.getElementById('keyfile').style.display = src === 'file' ? 'block' : 'none';
+    document.getElementById('keymsg').style.display = (src === 'generate-key' || src === 'generate-passphrase') ? 'block' : 'none';
 }
 updateSizes();
+toggleKey();
 </script>
 {% endblock %}
