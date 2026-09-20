@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Symmetric Decryption</h2>
+<div class="card shadow">
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label class="form-label">Encrypted file (.enc)</label>
+                <input type="file" name="file" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Key Source</label>
+                <select name="key_source" id="ksrc" class="form-select" onchange="toggleKey()">
+                    <option value="text">Type a key or passphrase</option>
+                    <option value="file">Upload a key file</option>
+                </select>
+            </div>
+            <div class="mb-3" id="keytext">
+                <label class="form-label">Key or Passphrase</label>
+                <input type="text" name="key_text" class="form-control">
+            </div>
+            <div class="mb-3" id="keyfile" style="display:none">
+                <label class="form-label">Key File</label>
+                <input type="file" name="key_file" class="form-control">
+            </div>
+            <button type="submit" class="btn btn-primary">Decrypt and Save</button>
+        </form>
+    </div>
+</div>
+<script>
+function toggleKey() {
+    const src = document.getElementById('ksrc').value;
+    document.getElementById('keytext').style.display = src === 'text' ? 'block' : 'none';
+    document.getElementById('keyfile').style.display = src === 'file' ? 'block' : 'none';
+}
+toggleKey();
+</script>
+{% endblock %}

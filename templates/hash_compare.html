@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Compare Hashes</h2>
+<div class="card shadow">
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label class="form-label">Hash Algorithm</label>
+                <select name="method" class="form-select">
+                    <option value="sha256" {% if method == 'sha256' %}selected{% endif %}>SHA-256</option>
+                    <option value="sha3" {% if method == 'sha3' %}selected{% endif %}>SHA3-256</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Upload File (optional)</label>
+                <input type="file" name="file" class="form-control">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Known Hash (or upload a file above)</label>
+                <input type="text" name="hash" class="form-control" value="{{ compare_hash }}">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">File Hash to Compare</label>
+                <input type="text" name="file_hash" class="form-control" value="{{ file_hash }}">
+            </div>
+            <button type="submit" class="btn btn-primary">Compare</button>
+        </form>
+        {% if match is not none %}
+        <div class="mt-3">
+            {% if match %}
+            <div class="alert alert-success">Hashes match.</div>
+            {% else %}
+            <div class="alert alert-danger">Hashes do not match.</div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

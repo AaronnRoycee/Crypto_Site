@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>My Keys</h2>
+<div class="card mb-4 shadow">
+    <div class="card-body">
+        <h5 class="card-title">Generate Key</h5>
+        <form method="post" action="{{ url_for('generate_key') }}">
+            <div class="row g-2">
+                <div class="col-md-4">
+                    <input type="text" name="name" class="form-control" placeholder="Key name" required>
+                </div>
+                <div class="col-md-4">
+                    <select name="key_type" class="form-select" required>
+                        <option value="aes-128">AES-128</option>
+                        <option value="aes-192" selected>AES-192</option>
+                        <option value="aes-256">AES-256</option>
+                        <option value="3des">3DES</option>
+                        <option value="rsa">RSA-2048</option>
+                        <option value="ecdh">ECDH</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary">Generate</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% if keys %}
+<table class="table">
+    <thead><tr><th>Name</th><th>Type</th><th>Created</th><th></th></tr></thead>
+    <tbody>
+    {% for k in keys %}
+    <tr>
+        <td>{{ k.name }}</td>
+        <td>{{ k.key_type }}</td>
+        <td>{{ k.created_at }}</td>
+        <td>
+            <a href="{{ url_for('download_key', key_id=k.id) }}" class="btn btn-sm btn-success">Download</a>
+            <form method="post" action="{{ url_for('delete_key', key_id=k.id) }}" style="display:inline">
+                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No keys yet.</p>
+{% endif %}
+{% endblock %}

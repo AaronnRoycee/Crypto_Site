@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Users</h2>
+<a href="{{ url_for('register') }}" class="btn btn-primary mb-3">Add User</a>
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Username</th>
+            <th>Admin</th>
+            <th>Created</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for user in users %}
+        <tr>
+            <td>{{ user.username }}</td>
+            <td>{% if user.is_admin %}Yes{% else %}No{% endif %}</td>
+            <td>{{ user.created_at }}</td>
+            <td>
+                <form method="post" action="{{ url_for('delete_user', username=user.username) }}" onsubmit="return confirm('Delete this user?')">
+                    <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

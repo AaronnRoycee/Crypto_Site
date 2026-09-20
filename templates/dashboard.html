@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mb-4">Dashboard</h2>
+<div class="row g-4">
+    <div class="col-md-4">
+        <div class="card h-100 shadow">
+            <div class="card-body">
+                <h5 class="card-title">Symmetric Crypto</h5>
+                <p class="card-text">AES and 3DES encryption and decryption.</p>
+                <a href="{{ url_for('encrypt_symmetric') }}" class="btn btn-primary btn-sm">Encrypt</a>
+                <a href="{{ url_for('decrypt_symmetric') }}" class="btn btn-secondary btn-sm">Decrypt</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 shadow">
+            <div class="card-body">
+                <h5 class="card-title">Asymmetric Crypto</h5>
+                <p class="card-text">RSA public/private key encryption.</p>
+                <a href="{{ url_for('encrypt_asymmetric') }}" class="btn btn-primary btn-sm">Encrypt</a>
+                <a href="{{ url_for('decrypt_asymmetric') }}" class="btn btn-secondary btn-sm">Decrypt</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 shadow">
+            <div class="card-body">
+                <h5 class="card-title">Hashing</h5>
+                <p class="card-text">SHA-2 and SHA-3 file hashing and comparison.</p>
+                <a href="{{ url_for('hash_file') }}" class="btn btn-primary btn-sm">Hash</a>
+                <a href="{{ url_for('hash_compare') }}" class="btn btn-secondary btn-sm">Compare</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 shadow">
+            <div class="card-body">
+                <h5 class="card-title">Keys</h5>
+                <p class="card-text">Generate AES, 3DES, RSA, and ECDH keys.</p>
+                <a href="{{ url_for('keys') }}" class="btn btn-primary btn-sm">Manage Keys</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 shadow">
+            <div class="card-body">
+                <h5 class="card-title">Passwords</h5>
+                <p class="card-text">Generate strong passwords up to 63 characters.</p>
+                <a href="{{ url_for('password') }}" class="btn btn-primary btn-sm">Generate</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 shadow">
+            <div class="card-body">
+                <h5 class="card-title">Key Sharing</h5>
+                <p class="card-text">ECDH shared secret derivation.</p>
+                <a href="{{ url_for('share') }}" class="btn btn-primary btn-sm">Share</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 shadow">
+            <div class="card-body">
+                <h5 class="card-title">Files</h5>
+                <p class="card-text">Upload and download stored documents.</p>
+                <a href="{{ url_for('files') }}" class="btn btn-primary btn-sm">My Files</a>
+            </div>
+        </div>
+    </div>
+    {% if is_admin %}
+    <div class="col-md-4">
+        <div class="card h-100 shadow">
+            <div class="card-body">
+                <h5 class="card-title">Users</h5>
+                <p class="card-text">Add or remove users.</p>
+                <a href="{{ url_for('users') }}" class="btn btn-primary btn-sm">Manage Users</a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

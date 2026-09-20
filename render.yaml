@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: cryptography-site
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: waitress-serve --port=$PORT app:app
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true

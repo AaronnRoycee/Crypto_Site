@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Symmetric Encryption</h2>
+<div class="card shadow">
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label class="form-label">File to encrypt</label>
+                <input type="file" name="file" class="form-control" required>
+            </div>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Algorithm</label>
+                    <select name="algorithm" id="algo" class="form-select" onchange="updateSizes()">
+                        <option value="AES">AES</option>
+                        <option value="3DES">3DES</option>
+                    </select>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Key Size</label>
+                    <select name="key_size" id="size" class="form-select"></select>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Mode</label>
+                    <select name="mode" id="mode" class="form-select"></select>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">IV (optional 32-bit number, 0-4294967295)</label>
+                <input type="number" name="iv" class="form-control" min="0" max="4294967295">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Key Source</label>
+                <select name="key_source" id="ksrc" class="form-select" onchange="toggleKey()">
+                    <option value="text">Type a key or passphrase</option>
+                    <option value="file">Upload a key file</option>
+                </select>
+            </div>
+            <div class="mb-3" id="keytext">
+                <label class="form-label">Key or Passphrase</label>
+                <input type="text" name="key_text" class="form-control">
+            </div>
+            <div class="mb-3" id="keyfile" style="display:none">
+                <label class="form-label">Key File</label>
+                <input type="file" name="key_file" class="form-control">
+                <small class="form-text text-muted">Upload an exact-length key, or any file used as a passphrase.</small>
+            </div>
+            <button type="submit" class="btn btn-primary">Encrypt and Save</button>
+        </form>
+    </div>
+</div>
+<script>
+const options = {
+    AES: { sizes: [[16,'128 bits'],[24,'192 bits'],[32,'256 bits']], modes: ['CBC','GCM'] },
+    '3DES': { sizes: [[24,'192 bits']], modes: ['CBC','CFB'] }
+};
+function updateSizes() {
+    const algo = document.getElementById('algo').value;
+    const sizeSel = document.getElementById('size');
+    const modeSel = document.getElementById('mode');
+    sizeSel.innerHTML = '';
+    modeSel.innerHTML = '';
+    options[algo].sizes.forEach(s => sizeSel.add(new Option(s[1], s[0])));
+    options[algo].modes.forEach(m => modeSel.add(new Option(m, m)));
+}
+function toggleKey() {
+    const src = document.getElementById('ksrc').value;
+    document.getElementById('keytext').style.display = src === 'text' ? 'block' : 'none';
+    document.getElementById('keyfile').style.display = src === 'file' ? 'block' : 'none';
+}
+updateSizes();
+</script>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Key Sharing (ECDH)</h2>
+<div class="card shadow">
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label class="form-label">Your ECDH Private Key</label>
+                <select name="key_id" class="form-select" required>
+                    {% for k in keys %}
+                    <option value="{{ k.id }}">{{ k.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Peer Public Key File (.pem)</label>
+                <input type="file" name="public_key" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Derive Shared Key</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

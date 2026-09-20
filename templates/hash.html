@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Hash File</h2>
+<div class="card shadow">
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label class="form-label">File</label>
+                <input type="file" name="file" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Compute Hashes</button>
+        </form>
+        {% if sha2 %}
+        <hr>
+        <p><strong>File:</strong> {{ filename }}</p>
+        <div class="mb-3">
+            <label class="form-label">SHA-256</label>
+            <input type="text" class="form-control" value="{{ sha2 }}" readonly>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">SHA3-256</label>
+            <input type="text" class="form-control" value="{{ sha3 }}" readonly>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
