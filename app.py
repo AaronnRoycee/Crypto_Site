@@ -355,29 +355,37 @@ def generate_key():
         get_db().execute('INSERT INTO keys (username, name, key_type, stored_name, created_at) VALUES (?, ?, ?, ?, ?)',
                          (session['username'], name, 'AES-128', rel, now()))
         get_db().commit()
+        key_id = get_db().execute('SELECT last_insert_rowid()').fetchone()[0]
         flash('AES-128 key generated')
-    elif key_type == 'aes-192':
+        return redirect(url_for('view_key', key_id=key_id))
+    if key_type == 'aes-192':
         data = os.urandom(24)
         rel, fname = save_key(d, f"{name}.key", data)
         get_db().execute('INSERT INTO keys (username, name, key_type, stored_name, created_at) VALUES (?, ?, ?, ?, ?)',
                          (session['username'], name, 'AES-192', rel, now()))
         get_db().commit()
+        key_id = get_db().execute('SELECT last_insert_rowid()').fetchone()[0]
         flash('AES-192 key generated')
-    elif key_type == 'aes-256':
+        return redirect(url_for('view_key', key_id=key_id))
+    if key_type == 'aes-256':
         data = os.urandom(32)
         rel, fname = save_key(d, f"{name}.key", data)
         get_db().execute('INSERT INTO keys (username, name, key_type, stored_name, created_at) VALUES (?, ?, ?, ?, ?)',
                          (session['username'], name, 'AES-256', rel, now()))
         get_db().commit()
+        key_id = get_db().execute('SELECT last_insert_rowid()').fetchone()[0]
         flash('AES-256 key generated')
-    elif key_type == '3des':
+        return redirect(url_for('view_key', key_id=key_id))
+    if key_type == '3des':
         data = os.urandom(24)
         rel, fname = save_key(d, f"{name}.key", data)
         get_db().execute('INSERT INTO keys (username, name, key_type, stored_name, created_at) VALUES (?, ?, ?, ?, ?)',
                          (session['username'], name, '3DES', rel, now()))
         get_db().commit()
+        key_id = get_db().execute('SELECT last_insert_rowid()').fetchone()[0]
         flash('3DES key generated')
-    elif key_type == 'rsa':
+        return redirect(url_for('view_key', key_id=key_id))
+    if key_type == 'rsa':
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         public_key = private_key.public_key()
         priv_pem = private_key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
@@ -386,11 +394,13 @@ def generate_key():
         rel_pub, _ = save_key(d, f"{name}_public.pem", pub_pem)
         get_db().execute('INSERT INTO keys (username, name, key_type, stored_name, created_at) VALUES (?, ?, ?, ?, ?)',
                          (session['username'], f"{name} (private)", 'RSA-Private', rel_priv, now()))
+        key_id = get_db().execute('SELECT last_insert_rowid()').fetchone()[0]
         get_db().execute('INSERT INTO keys (username, name, key_type, stored_name, created_at) VALUES (?, ?, ?, ?, ?)',
                          (session['username'], f"{name} (public)", 'RSA-Public', rel_pub, now()))
         get_db().commit()
         flash('RSA key pair generated')
-    elif key_type == 'ecdh':
+        return redirect(url_for('view_key', key_id=key_id))
+    if key_type == 'ecdh':
         private_key = ec.generate_private_key(ec.SECP256R1())
         public_key = private_key.public_key()
         priv_pem = private_key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
@@ -399,12 +409,13 @@ def generate_key():
         rel_pub, _ = save_key(d, f"{name}_public.pem", pub_pem)
         get_db().execute('INSERT INTO keys (username, name, key_type, stored_name, created_at) VALUES (?, ?, ?, ?, ?)',
                          (session['username'], f"{name} (private)", 'ECDH-Private', rel_priv, now()))
+        key_id = get_db().execute('SELECT last_insert_rowid()').fetchone()[0]
         get_db().execute('INSERT INTO keys (username, name, key_type, stored_name, created_at) VALUES (?, ?, ?, ?, ?)',
                          (session['username'], f"{name} (public)", 'ECDH-Public', rel_pub, now()))
         get_db().commit()
         flash('ECDH key pair generated')
-    else:
-        flash('Unknown key type')
+        return redirect(url_for('view_key', key_id=key_id))
+    flash('Unknown key type')
     return redirect(url_for('keys'))
 
 
@@ -433,6 +444,23 @@ def delete_key(key_id):
     get_db().commit()
     flash('Key deleted')
     return redirect(url_for('keys'))
+
+
+@app.route('/keys/view/<int:key_id>')
+@login_required
+def view_key(key_id):
+    row = get_db().execute('SELECT * FROM keys WHERE id = ? AND username = ?', (key_id, session['username'],)).fetchone()
+    if not row:
+        abort(404)
+    p = KEYS_DIR / row['stored_name']
+    if not p.exists():
+        abort(404)
+    data = p.read_bytes()
+    if row['key_type'].endswith('Private') or row['key_type'].endswith('Public'):
+        content = data.decode()
+    else:
+        content = base64.b64encode(data).decode()
+    return render_template('view_key.html', key=row, content=content)
 
 
 @app.route('/encrypt/symmetric', methods=['GET', 'POST'])

@@ -36,6 +36,7 @@
         <td>{{ k.key_type }}</td>
         <td>{{ k.created_at }}</td>
         <td>
+            <a href="{{ url_for('view_key', key_id=k.id) }}" class="btn btn-sm btn-info">View</a>
             <a href="{{ url_for('download_key', key_id=k.id) }}" class="btn btn-sm btn-success">Download</a>
             <form method="post" action="{{ url_for('delete_key', key_id=k.id) }}" style="display:inline">
                 <button type="submit" class="btn btn-sm btn-danger">Delete</button>
