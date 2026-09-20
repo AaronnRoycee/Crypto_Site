@@ -1,20 +1,74 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>Encryption Complete</h2>
-<p class="text-muted">Download the encrypted file and the key or passphrase used. Both are needed to decrypt.</p>
-<div class="card shadow">
+<p class="text-muted">Below is the encrypted file and the key used. Both can be downloaded or copied.</p>
+<div class="card shadow mb-4">
     <div class="card-body">
         <h5 class="card-title">Encrypted File</h5>
         <p class="card-text">{{ file.filename }}</p>
-        <a href="{{ url_for('download_file', file_id=file.id) }}" class="btn btn-success mb-4">Download Encrypted File</a>
-        {% if key %}
-        <h5 class="card-title">Key / Passphrase</h5>
-        <p class="card-text">{{ key.name }}</p>
-        <a href="{{ url_for('view_key', key_id=key.id) }}" class="btn btn-info">View Key</a>
-        <a href="{{ url_for('download_key', key_id=key.id) }}" class="btn btn-primary">Download Key</a>
-        {% endif %}
-        <hr>
-        <a href="{{ url_for('decrypt_symmetric') }}" class="btn btn-secondary">Go to Decrypt</a>
+        <a href="{{ url_for('download_file', file_id=file.id) }}" class="btn btn-success mb-3">Download Encrypted File</a>
+        <div class="mb-3">
+            <label class="form-label">Encrypted Content</label>
+            <textarea class="form-control font-monospace" rows="8" id="file_display" readonly></textarea>
+            <textarea style="display:none;" id="file_real">{{ file_content }}</textarea>
+        </div>
+        <button type="button" class="btn btn-secondary" id="file_toggle">Show</button>
     </div>
 </div>
+{% if key %}
+<div class="card shadow mb-4">
+    <div class="card-body">
+        <h5 class="card-title">Key Used</h5>
+        <p class="card-text">{{ key.name }} ({{ key.key_type }})</p>
+        <a href="{{ url_for('view_key', key_id=key.id) }}" class="btn btn-info">View Key</a>
+        <a href="{{ url_for('download_key', key_id=key.id) }}" class="btn btn-primary">Download Key</a>
+        <div class="mb-3 mt-3">
+            <label class="form-label">Key Content</label>
+            <textarea class="form-control font-monospace" rows="6" id="key_display" readonly></textarea>
+            <textarea style="display:none;" id="key_real">{{ key_content }}</textarea>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-secondary" id="key_toggle">Show</button>
+            <button type="button" class="btn btn-primary" id="key_copy">Copy</button>
+        </div>
+    </div>
+</div>
+{% endif %}
+<div class="card shadow">
+    <div class="card-body">
+        <a href="{{ decrypt_url }}" class="btn btn-secondary">Go to Decrypt</a>
+    </div>
+</div>
+<script>
+function mask(s) {
+    let out = '';
+    for (const c of s) {
+        out += c === '\n' ? '\n' : '\u2022';
+    }
+    return out;
+}
+function toggleTextarea(realId, displayId, buttonId) {
+    const real = document.getElementById(realId);
+    const display = document.getElementById(displayId);
+    const button = document.getElementById(buttonId);
+    let shown = false;
+    display.value = mask(real.value);
+    button.addEventListener('click', function() {
+        shown = !shown;
+        display.value = shown ? real.value : mask(real.value);
+        button.textContent = shown ? 'Hide' : 'Show';
+    });
+}
+toggleTextarea('file_real', 'file_display', 'file_toggle');
+{% if key %}
+toggleTextarea('key_real', 'key_display', 'key_toggle');
+document.getElementById('key_copy').addEventListener('click', function() {
+    navigator.clipboard.writeText(document.getElementById('key_real').value).then(function() {
+        const btn = document.getElementById('key_copy');
+        btn.textContent = 'Copied';
+        setTimeout(function() { btn.textContent = 'Copy'; }, 1500);
+    });
+});
+{% endif %}
+</script>
 {% endblock %}

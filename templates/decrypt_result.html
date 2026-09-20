@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Decryption Complete</h2>
+<p class="text-muted">The encrypted file and the recovered file are shown below for easy comparison.</p>
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card shadow h-100">
+            <div class="card-body">
+                <h5 class="card-title">Encrypted File</h5>
+                <p class="card-text">{{ enc_file.filename }}</p>
+                <a href="{{ url_for('download_file', file_id=enc_file.id) }}" class="btn btn-success mb-3">Download Encrypted File</a>
+                <textarea class="form-control font-monospace" rows="12" id="enc_display" readonly></textarea>
+                <textarea style="display:none;" id="enc_real">{{ enc_content }}</textarea>
+                <button type="button" class="btn btn-secondary mt-2" id="enc_toggle">Show</button>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-4">
+        <div class="card shadow h-100">
+            <div class="card-body">
+                <h5 class="card-title">Decrypted File</h5>
+                <p class="card-text">{{ dec_file.filename }}</p>
+                <a href="{{ url_for('download_file', file_id=dec_file.id) }}" class="btn btn-success mb-3">Download Decrypted File</a>
+                {% if dec_content is not none %}
+                <textarea class="form-control font-monospace" rows="12" readonly>{{ dec_content }}</textarea>
+                {% else %}
+                <p class="text-muted">This is a binary file. Use the download button to view it.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+function mask(s) {
+    let out = '';
+    for (const c of s) {
+        out += c === '\n' ? '\n' : '\u2022';
+    }
+    return out;
+}
+const encReal = document.getElementById('enc_real');
+const encDisplay = document.getElementById('enc_display');
+const encToggle = document.getElementById('enc_toggle');
+let shown = false;
+encDisplay.value = mask(encReal.value);
+encToggle.addEventListener('click', function() {
+    shown = !shown;
+    encDisplay.value = shown ? encReal.value : mask(encReal.value);
+    encToggle.textContent = shown ? 'Hide' : 'Show';
+});
+</script>
+{% endblock %}

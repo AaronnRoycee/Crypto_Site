@@ -464,6 +464,14 @@ def delete_key(key_id):
     return redirect(url_for('keys'))
 
 
+def prepare_key_content(row):
+    p = KEYS_DIR / row['stored_name']
+    data = p.read_bytes()
+    if row['key_type'].endswith('Private') or row['key_type'].endswith('Public') or row['key_type'] == 'Passphrase' or row['stored_name'].endswith('.txt'):
+        return data.decode()
+    return base64.b64encode(data).decode()
+
+
 @app.route('/keys/view/<int:key_id>')
 @login_required
 def view_key(key_id):
@@ -473,11 +481,7 @@ def view_key(key_id):
     p = KEYS_DIR / row['stored_name']
     if not p.exists():
         abort(404)
-    data = p.read_bytes()
-    if row['key_type'].endswith('Private') or row['key_type'].endswith('Public') or row['key_type'] == 'Passphrase' or row['stored_name'].endswith('.txt'):
-        content = data.decode()
-    else:
-        content = base64.b64encode(data).decode()
+    content = prepare_key_content(row)
     return render_template('view_key.html', key=row, content=content)
 
 
@@ -491,8 +495,43 @@ def encrypt_result():
     file_row = get_db().execute('SELECT * FROM files WHERE id = ? AND username = ?', (file_id, session['username'])).fetchone()
     if not file_row:
         abort(404)
+    enc_path = FILES_DIR / file_row['stored_name']
+    if not enc_path.exists():
+        abort(404)
+    file_content = enc_path.read_text()
+    try:
+        file_json = json.loads(file_content)
+    except Exception:
+        file_json = {}
+    decrypt_url = url_for('decrypt_asymmetric') if file_json.get('algorithm') == 'RSA-AES-GCM' else url_for('decrypt_symmetric')
     key_row = get_db().execute('SELECT * FROM keys WHERE id = ? AND username = ?', (key_id, session['username'])).fetchone()
-    return render_template('encrypt_result.html', file=file_row, key=key_row)
+    key_content = prepare_key_content(key_row) if key_row else None
+    return render_template('encrypt_result.html', file=file_row, key=key_row, file_content=file_content, key_content=key_content, decrypt_url=decrypt_url)
+
+
+@app.route('/decrypt/result')
+@login_required
+def decrypt_result():
+    enc_file_id = request.args.get('enc_file_id', type=int)
+    dec_file_id = request.args.get('dec_file_id', type=int)
+    if not enc_file_id or not dec_file_id:
+        abort(404)
+    enc_row = get_db().execute('SELECT * FROM files WHERE id = ? AND username = ?', (enc_file_id, session['username'])).fetchone()
+    dec_row = get_db().execute('SELECT * FROM files WHERE id = ? AND username = ?', (dec_file_id, session['username'])).fetchone()
+    if not enc_row or not dec_row:
+        abort(404)
+    enc_path = FILES_DIR / enc_row['stored_name']
+    dec_path = FILES_DIR / dec_row['stored_name']
+    enc_content = enc_path.read_text() if enc_path.exists() else ''
+    dec_content = None
+    if dec_path.exists():
+        try:
+            dec_data = dec_path.read_bytes()
+            if len(dec_data) < 50000:
+                dec_content = dec_data.decode('utf-8')
+        except Exception:
+            pass
+    return render_template('decrypt_result.html', enc_file=enc_row, dec_file=dec_row, enc_content=enc_content, dec_content=dec_content)
 
 
 @app.route('/encrypt/symmetric', methods=['GET', 'POST'])
@@ -639,8 +678,9 @@ def decrypt_symmetric():
         flash('No encrypted file selected')
         return redirect(url_for('decrypt_symmetric'))
     f = request.files['file']
+    f_bytes = f.read()
     try:
-        data = json.loads(f.read())
+        data = json.loads(f_bytes)
     except Exception:
         flash('Invalid encrypted file')
         return redirect(url_for('decrypt_symmetric'))
@@ -652,13 +692,23 @@ def decrypt_symmetric():
     ciphertext = base64.b64decode(data['ciphertext'])
     tag = base64.b64decode(data['tag']) if data.get('tag') else None
     original = data.get('original_filename', 'decrypted')
+    d = user_file_dir(session['username'])
+    enc_rel, enc_name = save_file(d, secure_filename(f.filename), f_bytes)
+    db = get_db()
+    db.execute('INSERT INTO files (username, filename, stored_name, uploaded_at) VALUES (?, ?, ?, ?)',
+               (session['username'], enc_name, enc_rel, now()))
+    db.commit()
+    enc_file_id = db.execute('SELECT id FROM files WHERE stored_name = ?', (enc_rel,)).fetchone()['id']
     key_source = request.form.get('key_source', '')
+    key_id = None
     key_data = b''
     if key_source == 'file':
         if 'key_file' not in request.files or request.files['key_file'].filename == '':
             flash('Key file required')
             return redirect(url_for('decrypt_symmetric'))
-        key_data = request.files['key_file'].read()
+        kf = request.files['key_file']
+        key_data = kf.read()
+        key_id = save_key_record(session['username'], kf.filename, key_data, 'Decryption-Key')
     else:
         key_text = request.form.get('key_text', '')
         if not key_text:
@@ -701,13 +751,13 @@ def decrypt_symmetric():
     except Exception as e:
         flash('Decryption failed: ' + str(e))
         return redirect(url_for('decrypt_symmetric'))
-    d = user_file_dir(session['username'])
     rel, name = save_file(d, original, plaintext)
-    get_db().execute('INSERT INTO files (username, filename, stored_name, uploaded_at) VALUES (?, ?, ?, ?)',
-                     (session['username'], name, rel, now()))
-    get_db().commit()
+    db.execute('INSERT INTO files (username, filename, stored_name, uploaded_at) VALUES (?, ?, ?, ?)',
+               (session['username'], name, rel, now()))
+    db.commit()
+    dec_file_id = db.execute('SELECT id FROM files WHERE stored_name = ?', (rel,)).fetchone()['id']
     flash('File decrypted')
-    return redirect(url_for('files'))
+    return redirect(url_for('decrypt_result', enc_file_id=enc_file_id, dec_file_id=dec_file_id))
 
 
 @app.route('/encrypt/asymmetric', methods=['GET', 'POST'])
@@ -721,7 +771,9 @@ def encrypt_asymmetric():
         return redirect(url_for('encrypt_asymmetric'))
     f = request.files['file']
     key_source = request.form.get('key_source', '')
+    key_id = None
     pub_data = b''
+    base = secure_filename(f.filename)
     if key_source == 'saved':
         key_id = request.form.get('key_id', '')
         if not key_id:
@@ -737,7 +789,9 @@ def encrypt_asymmetric():
         if 'public_key' not in request.files or request.files['public_key'].filename == '':
             flash('Public key file required')
             return redirect(url_for('encrypt_asymmetric'))
-        pub_data = request.files['public_key'].read()
+        pk = request.files['public_key']
+        pub_data = pk.read()
+        key_id = save_key_record(session['username'], pk.filename, pub_data, 'RSA-Public')
     try:
         public_key = serialization.load_pem_public_key(pub_data)
     except Exception:
@@ -760,12 +814,13 @@ def encrypt_asymmetric():
     }
     out_bytes = json.dumps(out, indent=2).encode()
     d = user_file_dir(session['username'])
-    rel, name = save_file(d, f"{secure_filename(f.filename)}.rsa", out_bytes)
-    get_db().execute('INSERT INTO files (username, filename, stored_name, uploaded_at) VALUES (?, ?, ?, ?)',
-                     (session['username'], name, rel, now()))
-    get_db().commit()
-    flash('File encrypted')
-    return redirect(url_for('files'))
+    rel, name = save_file(d, f"{base}.rsa", out_bytes)
+    db = get_db()
+    db.execute('INSERT INTO files (username, filename, stored_name, uploaded_at) VALUES (?, ?, ?, ?)',
+               (session['username'], name, rel, now()))
+    db.commit()
+    file_id = db.execute('SELECT id FROM files WHERE stored_name = ?', (rel,)).fetchone()['id']
+    return redirect(url_for('encrypt_result', file_id=file_id, key_id=key_id))
 
 
 @app.route('/decrypt/asymmetric', methods=['GET', 'POST'])
@@ -778,12 +833,21 @@ def decrypt_asymmetric():
         flash('No file selected')
         return redirect(url_for('decrypt_asymmetric'))
     f = request.files['file']
+    f_bytes = f.read()
     try:
-        data = json.loads(f.read())
+        data = json.loads(f_bytes)
     except Exception:
         flash('Invalid encrypted file')
         return redirect(url_for('decrypt_asymmetric'))
+    d = user_file_dir(session['username'])
+    enc_rel, enc_name = save_file(d, secure_filename(f.filename), f_bytes)
+    db = get_db()
+    db.execute('INSERT INTO files (username, filename, stored_name, uploaded_at) VALUES (?, ?, ?, ?)',
+               (session['username'], enc_name, enc_rel, now()))
+    db.commit()
+    enc_file_id = db.execute('SELECT id FROM files WHERE stored_name = ?', (enc_rel,)).fetchone()['id']
     key_source = request.form.get('key_source', '')
+    key_id = None
     priv_data = b''
     if key_source == 'saved':
         key_id = request.form.get('key_id', '')
@@ -800,7 +864,9 @@ def decrypt_asymmetric():
         if 'private_key' not in request.files or request.files['private_key'].filename == '':
             flash('Private key file required')
             return redirect(url_for('decrypt_asymmetric'))
-        priv_data = request.files['private_key'].read()
+        kf = request.files['private_key']
+        priv_data = kf.read()
+        key_id = save_key_record(session['username'], kf.filename, priv_data, 'RSA-Private')
     try:
         private_key = serialization.load_pem_private_key(priv_data, password=None)
     except Exception:
@@ -817,13 +883,13 @@ def decrypt_asymmetric():
     except Exception:
         flash('Decryption failed')
         return redirect(url_for('decrypt_asymmetric'))
-    d = user_file_dir(session['username'])
     rel, name = save_file(d, data.get('original_filename', 'decrypted'), plaintext)
-    get_db().execute('INSERT INTO files (username, filename, stored_name, uploaded_at) VALUES (?, ?, ?, ?)',
-                     (session['username'], name, rel, now()))
-    get_db().commit()
+    db.execute('INSERT INTO files (username, filename, stored_name, uploaded_at) VALUES (?, ?, ?, ?)',
+               (session['username'], name, rel, now()))
+    db.commit()
+    dec_file_id = db.execute('SELECT id FROM files WHERE stored_name = ?', (rel,)).fetchone()['id']
     flash('File decrypted')
-    return redirect(url_for('files'))
+    return redirect(url_for('decrypt_result', enc_file_id=enc_file_id, dec_file_id=dec_file_id))
 
 
 @app.route('/hash', methods=['GET', 'POST'])
