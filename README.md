@@ -64,6 +64,8 @@ The first user to register is automatically an administrator. After that, only l
 
 ## Deploy on Render
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/AaronnRoycee/Crypto_Site)
+
 1. Sign up for a free Render account.
 2. Click **New +** and choose **Web Service**.
 3. Connect the GitHub repository you just pushed.
