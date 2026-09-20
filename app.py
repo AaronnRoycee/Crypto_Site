@@ -151,6 +151,24 @@ def save_key_record(username, name, data, key_type):
     return db.execute('SELECT id FROM keys WHERE stored_name = ?', (rel,)).fetchone()['id']
 
 
+def ensure_default_rsa_keys(username):
+    db = get_db()
+    if db.execute("SELECT 1 FROM keys WHERE username = ? AND key_type = 'RSA-Public'", (username,)).fetchone():
+        return
+    d = user_key_dir(username)
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    public_key = private_key.public_key()
+    priv_pem = private_key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+    pub_pem = public_key.public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+    rel_priv, _ = save_key(d, 'Default_RSA_private.pem', priv_pem)
+    rel_pub, _ = save_key(d, 'Default_RSA_public.pem', pub_pem)
+    db.execute('INSERT INTO keys (username, name, key_type, stored_name, created_at) VALUES (?, ?, ?, ?, ?)',
+               (username, 'Default RSA (private)', 'RSA-Private', rel_priv, now()))
+    db.execute('INSERT INTO keys (username, name, key_type, stored_name, created_at) VALUES (?, ?, ?, ?, ?)',
+               (username, 'Default RSA (public)', 'RSA-Public', rel_pub, now()))
+    db.commit()
+
+
 def generate_password(length=16, upper=True, lower=True, digits=True, special=True):
     alphabet = ''
     if upper:
@@ -201,6 +219,7 @@ def login():
         user = get_db().execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
         if user and check_password_hash(user['password_hash'], password):
             session['username'] = username
+            ensure_default_rsa_keys(username)
             return redirect(url_for('dashboard'))
         flash('Invalid username or password')
     return render_template('login.html', allow_register=not any_user())
@@ -236,6 +255,7 @@ def register():
         get_db().commit()
         if not any_user() or 'username' not in session:
             session['username'] = username
+        ensure_default_rsa_keys(username)
         flash('User created')
         return redirect(url_for('users'))
     return render_template('register.html')
