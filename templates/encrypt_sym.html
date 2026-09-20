@@ -68,6 +68,7 @@ function updateSizes() {
     modeSel.innerHTML = '';
     options[algo].sizes.forEach(s => sizeSel.add(new Option(s[1], s[0])));
     options[algo].modes.forEach(m => modeSel.add(new Option(m, m)));
+    if (algo === 'AES') sizeSel.value = '24';
 }
 function toggleKey() {
     const src = document.getElementById('ksrc').value;
