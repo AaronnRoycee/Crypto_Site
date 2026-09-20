@@ -51,19 +51,26 @@ A Flask web application that provides user authentication, key generation, symme
 
 The first user to register is automatically an administrator. After that, only logged-in administrators can add or remove other users.
 
-## Deployment
+## Push to GitHub
 
-This app can be deployed to Render for free.
+1. Create a new empty GitHub repository.
+2. In the project folder, run:
 
-1. Create a GitHub repository and push the project files.
-2. Sign up for a free Render account.
-3. Create a new Web Service and connect the GitHub repository.
-4. Use the following settings:
-    - Build command: `pip install -r requirements.txt`
-    - Start command: `waitress-serve --port=$PORT app:app`
-5. Add an environment variable named `SECRET_KEY` with a long random string.
+    git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
+    git branch -M main
+    git push -u origin main
 
-Once deployed, the site will be accessible from any computer or phone with a browser.
+3. Git will ask for your GitHub username and a Personal Access Token. Create a token at `https://github.com/settings/tokens` with `repo` scope.
+
+## Deploy on Render
+
+1. Sign up for a free Render account.
+2. Click **New +** and choose **Web Service**.
+3. Connect the GitHub repository you just pushed.
+4. Render will read the `render.yaml` file and set the build and start commands automatically.
+5. After the first deploy, open the URL shown in the Render dashboard.
+
+The first user to register on the live site becomes the administrator.
 
 ## Important Notes
 
