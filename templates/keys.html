@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>My Keys</h2>
+<p class="text-muted">Generate and manage the keys used to encrypt, decrypt, sign, and share data securely.</p>
 <div class="card mb-4 shadow">
     <div class="card-body">
         <h5 class="card-title">Generate Key</h5>
@@ -10,7 +11,7 @@
                     <input type="text" name="name" class="form-control" placeholder="Key name" required>
                 </div>
                 <div class="col-md-4">
-                    <select name="key_type" class="form-select" required>
+                    <select name="key_type" id="key_type" class="form-select" required onchange="updateDesc()">
                         <option value="aes-128">AES-128</option>
                         <option value="aes-192" selected>AES-192</option>
                         <option value="aes-256">AES-256</option>
@@ -24,8 +25,23 @@
                 </div>
             </div>
         </form>
+        <p class="text-muted mt-2" id="key_desc"></p>
     </div>
 </div>
+<script>
+const keyDescs = {
+    'aes-128': 'A fast symmetric key with a 128-bit length, suitable for general file encryption.',
+    'aes-192': 'A symmetric key with a 192-bit length, balancing speed and security.',
+    'aes-256': 'A symmetric key with a 256-bit length, the strongest standard AES option.',
+    '3des': 'A legacy symmetric cipher with a 192-bit key based on the older DES algorithm.',
+    'rsa': 'An asymmetric key pair used for public-key encryption and decryption.',
+    'ecdh': 'An elliptic curve key pair used to derive a shared secret with another party.'
+};
+function updateDesc() {
+    document.getElementById('key_desc').textContent = keyDescs[document.getElementById('key_type').value] || '';
+}
+updateDesc();
+</script>
 {% if keys %}
 <table class="table">
     <thead><tr><th>Name</th><th>Type</th><th>Created</th><th></th></tr></thead>

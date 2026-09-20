@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>My Files</h2>
+<p class="text-muted">Upload, download, and manage your stored files, including encrypted documents and keys.</p>
 <form method="post" action="{{ url_for('upload_file') }}" enctype="multipart/form-data" class="mb-4">
     <div class="input-group">
         <input type="file" name="file" class="form-control" required>

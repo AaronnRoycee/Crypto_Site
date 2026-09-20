@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>Users</h2>
+<p class="text-muted">Manage user accounts. Administrators can add new users or remove existing ones.</p>
 <a href="{{ url_for('register') }}" class="btn btn-primary mb-3">Add User</a>
 <table class="table table-striped">
     <thead>
