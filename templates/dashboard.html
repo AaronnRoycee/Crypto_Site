@@ -74,8 +74,19 @@
         <div class="card h-100 shadow">
             <div class="card-body">
                 <h5 class="card-title">Users</h5>
-                <p class="card-text">Add or remove users.</p>
+                <p class="card-text">Add or remove users and set admin status.</p>
                 <a href="{{ url_for('users') }}" class="btn btn-primary btn-sm">Manage Users</a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% if can_claim_admin %}
+    <div class="col-md-4">
+        <div class="card h-100 shadow">
+            <div class="card-body">
+                <h5 class="card-title">Admin Access</h5>
+                <p class="card-text">You are the first registered user. Claim admin privileges to manage the site.</p>
+                <a href="{{ url_for('claim_admin') }}" class="btn btn-warning btn-sm">Claim Admin</a>
             </div>
         </div>
     </div>

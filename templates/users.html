@@ -19,9 +19,18 @@
             <td>{% if user.is_admin %}Yes{% else %}No{% endif %}</td>
             <td>{{ user.created_at }}</td>
             <td>
-                <form method="post" action="{{ url_for('delete_user', username=user.username) }}" onsubmit="return confirm('Delete this user?')">
-                    <button type="submit" class="btn btn-sm btn-danger">Delete</button>
-                </form>
+                <div class="d-flex gap-2">
+                    <form method="post" action="{{ url_for('toggle_admin', username=user.username) }}">
+                        {% if user.is_admin %}
+                        <button type="submit" class="btn btn-sm btn-warning">Remove Admin</button>
+                        {% else %}
+                        <button type="submit" class="btn btn-sm btn-success">Make Admin</button>
+                        {% endif %}
+                    </form>
+                    <form method="post" action="{{ url_for('delete_user', username=user.username) }}" onsubmit="return confirm('Delete this user?')">
+                        <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                    </form>
+                </div>
             </td>
         </tr>
         {% endfor %}

@@ -316,7 +316,9 @@ def register():
 @app.route('/')
 @login_required
 def dashboard():
-    return render_template('dashboard.html')
+    first = get_db().execute('SELECT username FROM users ORDER BY created_at LIMIT 1').fetchone()
+    can_claim = first and first['username'] == session['username'] and not is_admin_user()
+    return render_template('dashboard.html', can_claim_admin=can_claim)
 
 
 @app.route('/users')
@@ -346,6 +348,38 @@ def delete_user(username):
     if kd.exists():
         shutil.rmtree(kd)
     flash('User deleted')
+    return redirect(url_for('users'))
+
+
+@app.route('/users/toggle-admin/<username>', methods=['POST'])
+@login_required
+@admin_required
+def toggle_admin(username):
+    if username == session['username']:
+        flash('You cannot change your own admin status')
+        return redirect(url_for('users'))
+    db = get_db()
+    user = db.execute('SELECT is_admin FROM users WHERE username = ?', (username,)).fetchone()
+    if not user:
+        flash('User not found')
+        return redirect(url_for('users'))
+    new_status = 0 if user['is_admin'] else 1
+    db.execute('UPDATE users SET is_admin = ? WHERE username = ?', (new_status, username))
+    db.commit()
+    flash('Admin status updated')
+    return redirect(url_for('users'))
+
+
+@app.route('/claim-admin')
+@login_required
+def claim_admin():
+    first = get_db().execute('SELECT username FROM users ORDER BY created_at LIMIT 1').fetchone()
+    if not first or first['username'] != session['username']:
+        flash('Only the first registered user can claim admin')
+        return redirect(url_for('dashboard'))
+    get_db().execute('UPDATE users SET is_admin = 1 WHERE username = ?', (session['username'],))
+    get_db().commit()
+    flash('You are now an admin')
     return redirect(url_for('users'))
 
 
