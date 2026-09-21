@@ -36,7 +36,16 @@
 {% endif %}
 <div class="card shadow">
     <div class="card-body">
-        <a href="{{ decrypt_url }}" class="btn btn-secondary">Go to Decrypt</a>
+        <h5 class="card-title">Try the Full Round Trip</h5>
+        <p class="text-muted">Click below to decrypt the file you just encrypted with the same key and see the original content.</p>
+        {% if key %}
+        <form method="post" action="{{ url_for('auto_decrypt') }}" class="mb-2">
+            <input type="hidden" name="file_id" value="{{ file.id }}">
+            <input type="hidden" name="key_id" value="{{ key.id }}">
+            <button type="submit" class="btn btn-primary">Decrypt This File Now</button>
+        </form>
+        {% endif %}
+        <a href="{{ decrypt_url }}" class="btn btn-secondary">Go to Manual Decrypt</a>
     </div>
 </div>
 <script>

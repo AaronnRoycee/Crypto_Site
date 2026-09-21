@@ -211,6 +211,47 @@ def make_key_for_decrypt(key_data, key_size, salt=None):
     return key_data
 
 
+def decrypt_symmetric_data(data, key_data):
+    algorithm = data['algorithm']
+    key_size = data['key_size']
+    mode = data['mode']
+    iv = base64.b64decode(data['iv'])
+    salt = base64.b64decode(data['salt']) if data.get('salt') else None
+    ciphertext = base64.b64decode(data['ciphertext'])
+    tag = base64.b64decode(data['tag']) if data.get('tag') else None
+    key = make_key_for_decrypt(key_data, key_size, salt)
+    if algorithm == 'AES':
+        if mode == 'CBC':
+            dec = Cipher(algorithms.AES(key), modes.CBC(iv)).decryptor()
+            pt = dec.update(ciphertext) + dec.finalize()
+            unpadder = sym_padding.PKCS7(128).unpadder()
+            return unpadder.update(pt) + unpadder.finalize()
+        if mode == 'GCM':
+            dec = Cipher(algorithms.AES(key), modes.GCM(iv, tag)).decryptor()
+            return dec.update(ciphertext) + dec.finalize()
+    if algorithm == '3DES':
+        if mode == 'CBC':
+            dec = Cipher(TripleDES(key), modes.CBC(iv)).decryptor()
+            pt = dec.update(ciphertext) + dec.finalize()
+            unpadder = sym_padding.PKCS7(64).unpadder()
+            return unpadder.update(pt) + unpadder.finalize()
+        if mode == 'CFB':
+            dec = Cipher(TripleDES(key), decrepit_modes.CFB(iv)).decryptor()
+            return dec.update(ciphertext) + dec.finalize()
+    raise ValueError('Unsupported algorithm or mode')
+
+
+def decrypt_asymmetric_data(data, priv_data):
+    private_key = serialization.load_pem_private_key(priv_data, password=None)
+    encrypted_key = base64.b64decode(data['encrypted_key'])
+    iv = base64.b64decode(data['iv'])
+    tag = base64.b64decode(data['tag'])
+    ct = base64.b64decode(data['ciphertext'])
+    aes_key = private_key.decrypt(encrypted_key, asym_padding.OAEP(asym_padding.MGF1(hashes.SHA256()), hashes.SHA256(), None))
+    dec = Cipher(algorithms.AES(aes_key), modes.GCM(iv, tag)).decryptor()
+    return dec.update(ct) + dec.finalize()
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -552,6 +593,57 @@ def decrypt_result():
         except Exception:
             pass
     return render_template('decrypt_result.html', enc_file=enc_row, dec_file=dec_row, enc_content=enc_content, dec_content=dec_content)
+
+
+@app.route('/auto-decrypt', methods=['POST'])
+@login_required
+def auto_decrypt():
+    file_id = request.form.get('file_id', type=int)
+    key_id = request.form.get('key_id', type=int)
+    if not file_id or not key_id:
+        flash('File and key required')
+        return redirect(url_for('files'))
+    file_row = get_db().execute('SELECT * FROM files WHERE id = ? AND username = ?', (file_id, session['username'])).fetchone()
+    if not file_row:
+        abort(404)
+    enc_path = FILES_DIR / file_row['stored_name']
+    if not enc_path.exists():
+        abort(404)
+    try:
+        data = json.loads(enc_path.read_bytes())
+    except Exception:
+        flash('Invalid encrypted file')
+        return redirect(url_for('files'))
+    key_row = get_db().execute('SELECT * FROM keys WHERE id = ? AND username = ?', (key_id, session['username'])).fetchone()
+    if not key_row:
+        flash('Key not found')
+        return redirect(url_for('files'))
+    try:
+        if data.get('algorithm') == 'RSA-AES-GCM':
+            pub_stored = key_row['stored_name']
+            priv_stored = pub_stored.replace('_public.pem', '_private.pem')
+            priv_row = get_db().execute("SELECT * FROM keys WHERE username = ? AND key_type = 'RSA-Private' AND stored_name = ?",
+                                        (session['username'], priv_stored)).fetchone()
+            if not priv_row:
+                flash('Matching private key not found. Upload the private key to decrypt.')
+                return redirect(url_for('decrypt_asymmetric'))
+            priv_data = (KEYS_DIR / priv_row['stored_name']).read_bytes()
+            plaintext = decrypt_asymmetric_data(data, priv_data)
+        else:
+            key_data = (KEYS_DIR / key_row['stored_name']).read_bytes()
+            plaintext = decrypt_symmetric_data(data, key_data)
+    except Exception as e:
+        flash('Decryption failed: ' + str(e))
+        return redirect(url_for('files'))
+    d = user_file_dir(session['username'])
+    rel, name = save_file(d, data.get('original_filename', 'decrypted'), plaintext)
+    db = get_db()
+    db.execute('INSERT INTO files (username, filename, stored_name, uploaded_at) VALUES (?, ?, ?, ?)',
+               (session['username'], name, rel, now()))
+    db.commit()
+    dec_file_id = db.execute('SELECT id FROM files WHERE stored_name = ?', (rel,)).fetchone()['id']
+    flash('File auto-decrypted')
+    return redirect(url_for('decrypt_result', enc_file_id=file_id, dec_file_id=dec_file_id))
 
 
 @app.route('/encrypt/symmetric', methods=['GET', 'POST'])
