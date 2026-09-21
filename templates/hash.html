@@ -1,28 +1,65 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>Hash File</h2>
-<p class="text-muted">Upload any file to compute its SHA-256 and SHA3-256 hashes. Hashing is one-way and cannot be reversed.</p>
+<p class="text-muted">Hashing turns any file into a short, fixed-length fingerprint. The same file always produces the same hash, and even a tiny change to the file produces a completely different hash. Hashing is one-way, so the original file cannot be recovered from the hash.</p>
 <div class="card shadow">
     <div class="card-body">
         <form method="post" enctype="multipart/form-data">
             <div class="mb-3">
+                <label class="form-label">File Source</label>
+                <select name="file_source" id="fsrc" class="form-select" onchange="toggleFile()">
+                    <option value="upload">Upload a file from my computer</option>
+                    <option value="saved">Choose a saved file from this site</option>
+                </select>
+                <p class="form-text text-muted" id="file_source_desc"></p>
+            </div>
+            <div class="mb-3" id="fileupload">
                 <label class="form-label">File</label>
-                <input type="file" name="file" class="form-control" required>
+                <input type="file" name="file" class="form-control">
+            </div>
+            <div class="mb-3" id="filesaved" style="display:none">
+                <label class="form-label">Saved File</label>
+                <select name="file_id" class="form-select">
+                    {% for f in files %}
+                    <option value="{{ f.id }}">{{ f.filename }}</option>
+                    {% endfor %}
+                </select>
             </div>
             <button type="submit" class="btn btn-primary">Compute Hashes</button>
         </form>
         {% if sha2 %}
         <hr>
         <p><strong>File:</strong> {{ filename }}</p>
+        <p class="text-muted">These hashes uniquely identify the file content. Share the hash with someone so they can verify they received the exact same file.</p>
         <div class="mb-3">
             <label class="form-label">SHA-256</label>
-            <input type="text" class="form-control" value="{{ sha2 }}" readonly>
+            <input type="text" class="form-control" value="{{ sha2 }}" id="sha2" readonly>
+            <button type="button" class="btn btn-sm btn-secondary mt-1" onclick="copyText('sha2')">Copy</button>
         </div>
         <div class="mb-3">
             <label class="form-label">SHA3-256</label>
-            <input type="text" class="form-control" value="{{ sha3 }}" readonly>
+            <input type="text" class="form-control" value="{{ sha3 }}" id="sha3" readonly>
+            <button type="button" class="btn btn-sm btn-secondary mt-1" onclick="copyText('sha3')">Copy</button>
         </div>
         {% endif %}
     </div>
 </div>
+<script>
+const fileSourceDescs = {
+    upload: 'Select a file from your computer to compute its hash.',
+    saved: 'Pick a file you already saved on this site to compute its hash.'
+};
+function toggleFile() {
+    const src = document.getElementById('fsrc').value;
+    document.getElementById('fileupload').style.display = src === 'upload' ? 'block' : 'none';
+    document.getElementById('filesaved').style.display = src === 'saved' ? 'block' : 'none';
+    document.getElementById('file_source_desc').textContent = fileSourceDescs[src] || '';
+}
+function copyText(id) {
+    const el = document.getElementById(id);
+    el.select();
+    navigator.clipboard.writeText(el.value);
+}
+toggleFile();
+</script>
 {% endblock %}

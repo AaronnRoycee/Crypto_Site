@@ -151,21 +151,32 @@ def save_key_record(username, name, data, key_type):
     return db.execute('SELECT id FROM keys WHERE stored_name = ?', (rel,)).fetchone()['id']
 
 
-def ensure_default_rsa_keys(username):
-    db = get_db()
-    if db.execute("SELECT 1 FROM keys WHERE username = ? AND key_type = 'RSA-Public'", (username,)).fetchone():
-        return
+def ensure_default_keys(username):
     d = user_key_dir(username)
-    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    public_key = private_key.public_key()
-    priv_pem = private_key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
-    pub_pem = public_key.public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
-    rel_priv, _ = save_key(d, 'Default_RSA_private.pem', priv_pem)
-    rel_pub, _ = save_key(d, 'Default_RSA_public.pem', pub_pem)
-    db.execute('INSERT INTO keys (username, name, key_type, stored_name, created_at) VALUES (?, ?, ?, ?, ?)',
-               (username, 'Default RSA (private)', 'RSA-Private', rel_priv, now()))
-    db.execute('INSERT INTO keys (username, name, key_type, stored_name, created_at) VALUES (?, ?, ?, ?, ?)',
-               (username, 'Default RSA (public)', 'RSA-Public', rel_pub, now()))
+    db = get_db()
+    if not db.execute("SELECT 1 FROM keys WHERE username = ? AND key_type = 'RSA-Public'", (username,)).fetchone():
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        public_key = private_key.public_key()
+        priv_pem = private_key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+        pub_pem = public_key.public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+        rel_priv, _ = save_key(d, 'Default_RSA_private.pem', priv_pem)
+        rel_pub, _ = save_key(d, 'Default_RSA_public.pem', pub_pem)
+        db.execute('INSERT INTO keys (username, name, key_type, stored_name, created_at) VALUES (?, ?, ?, ?, ?)',
+                   (username, 'Default RSA (private)', 'RSA-Private', rel_priv, now()))
+        db.execute('INSERT INTO keys (username, name, key_type, stored_name, created_at) VALUES (?, ?, ?, ?, ?)',
+                   (username, 'Default RSA (public)', 'RSA-Public', rel_pub, now()))
+    if not db.execute("SELECT 1 FROM keys WHERE username = ? AND key_type = 'ECDH-Public'", (username,)).fetchone():
+        private_key = ec.generate_private_key(ec.SECP256R1())
+        public_key = private_key.public_key()
+        priv_pem = private_key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+        pub_pem = public_key.public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+        rel_priv, _ = save_key(d, 'Default_ECDH_private.pem', priv_pem)
+        rel_pub, _ = save_key(d, 'Default_ECDH_public.pem', pub_pem)
+        db.execute('INSERT INTO keys (username, name, key_type, stored_name, created_at) VALUES (?, ?, ?, ?, ?)',
+                   (username, 'Default ECDH (private)', 'ECDH-Private', rel_priv, now()))
+        key_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+        db.execute('INSERT INTO keys (username, name, key_type, stored_name, created_at) VALUES (?, ?, ?, ?, ?)',
+                   (username, 'Default ECDH (public)', 'ECDH-Public', rel_pub, now()))
     db.commit()
 
 
@@ -260,7 +271,7 @@ def login():
         user = get_db().execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
         if user and check_password_hash(user['password_hash'], password):
             session['username'] = username
-            ensure_default_rsa_keys(username)
+            ensure_default_keys(username)
             return redirect(url_for('dashboard'))
         flash('Invalid username or password')
     return render_template('login.html', allow_register=not any_user())
@@ -296,7 +307,7 @@ def register():
         get_db().commit()
         if not any_user() or 'username' not in session:
             session['username'] = username
-        ensure_default_rsa_keys(username)
+        ensure_default_keys(username)
         flash('User created')
         return redirect(url_for('users'))
     return render_template('register.html')
@@ -1046,26 +1057,60 @@ def decrypt_asymmetric():
 @login_required
 def hash_file():
     if request.method == 'GET':
-        return render_template('hash.html')
-    if 'file' not in request.files or request.files['file'].filename == '':
-        flash('No file selected')
-        return redirect(url_for('hash_file'))
-    f = request.files['file']
-    data = f.read()
+        files = get_db().execute('SELECT * FROM files WHERE username = ? ORDER BY uploaded_at DESC', (session['username'],)).fetchall()
+        return render_template('hash.html', files=files)
+    file_source = request.form.get('file_source', '')
+    data = b''
+    filename = ''
+    if file_source == 'saved':
+        file_id = request.form.get('file_id', '')
+        if not file_id:
+            flash('No file selected')
+            return redirect(url_for('hash_file'))
+        file_row = get_db().execute('SELECT * FROM files WHERE id = ? AND username = ?', (file_id, session['username'])).fetchone()
+        if not file_row:
+            flash('File not found')
+            return redirect(url_for('hash_file'))
+        data = (FILES_DIR / file_row['stored_name']).read_bytes()
+        filename = file_row['filename']
+    else:
+        if 'file' not in request.files or request.files['file'].filename == '':
+            flash('No file selected')
+            return redirect(url_for('hash_file'))
+        f = request.files['file']
+        data = f.read()
+        filename = f.filename
     sha2 = hashlib.sha256(data).hexdigest()
     sha3 = hashlib.sha3_256(data).hexdigest()
-    return render_template('hash.html', sha2=sha2, sha3=sha3, filename=f.filename)
+    files = get_db().execute('SELECT * FROM files WHERE username = ? ORDER BY uploaded_at DESC', (session['username'],)).fetchall()
+    return render_template('hash.html', sha2=sha2, sha3=sha3, filename=filename, files=files)
 
 
 @app.route('/hash/compare', methods=['GET', 'POST'])
 @login_required
 def hash_compare():
     if request.method == 'GET':
-        return render_template('hash_compare.html')
+        files = get_db().execute('SELECT * FROM files WHERE username = ? ORDER BY uploaded_at DESC', (session['username'],)).fetchall()
+        return render_template('hash_compare.html', files=files)
     method = request.form.get('method', 'sha256')
     compare_hash = request.form.get('hash', '').strip().lower()
     file_hash = ''
-    if 'file' in request.files and request.files['file'].filename:
+    file_source = request.form.get('file_source', '')
+    if file_source == 'saved':
+        file_id = request.form.get('file_id', '')
+        if not file_id:
+            flash('No file selected')
+            return redirect(url_for('hash_compare'))
+        file_row = get_db().execute('SELECT * FROM files WHERE id = ? AND username = ?', (file_id, session['username'])).fetchone()
+        if not file_row:
+            flash('File not found')
+            return redirect(url_for('hash_compare'))
+        data = (FILES_DIR / file_row['stored_name']).read_bytes()
+        if method == 'sha256':
+            file_hash = hashlib.sha256(data).hexdigest()
+        else:
+            file_hash = hashlib.sha3_256(data).hexdigest()
+    elif 'file' in request.files and request.files['file'].filename:
         f = request.files['file']
         data = f.read()
         if method == 'sha256':
@@ -1075,7 +1120,8 @@ def hash_compare():
     else:
         file_hash = request.form.get('file_hash', '').strip().lower()
     match = hmac.compare_digest(file_hash, compare_hash) if file_hash and compare_hash else False
-    return render_template('hash_compare.html', file_hash=file_hash, compare_hash=compare_hash, match=match, method=method)
+    files = get_db().execute('SELECT * FROM files WHERE username = ? ORDER BY uploaded_at DESC', (session['username'],)).fetchall()
+    return render_template('hash_compare.html', file_hash=file_hash, compare_hash=compare_hash, match=match, method=method, files=files)
 
 
 @app.route('/password', methods=['GET', 'POST'])
@@ -1104,7 +1150,8 @@ def password():
 def share():
     if request.method == 'GET':
         private_keys = get_db().execute("SELECT * FROM keys WHERE username = ? AND key_type = 'ECDH-Private'", (session['username'],)).fetchall()
-        return render_template('share.html', keys=private_keys)
+        peer_keys = get_db().execute("SELECT * FROM keys WHERE username = ? AND key_type = 'ECDH-Public'", (session['username'],)).fetchall()
+        return render_template('share.html', keys=private_keys, peer_keys=peer_keys)
     key_id = request.form.get('key_id', '')
     if not key_id:
         flash('Select your private key')
@@ -1114,10 +1161,24 @@ def share():
     if not row:
         flash('Private key not found')
         return redirect(url_for('share'))
-    if 'public_key' not in request.files or request.files['public_key'].filename == '':
-        flash('Peer public key required')
-        return redirect(url_for('share'))
-    pub_data = request.files['public_key'].read()
+    peer_source = request.form.get('peer_source', '')
+    pub_data = b''
+    if peer_source == 'saved':
+        peer_key_id = request.form.get('peer_key_id', '')
+        if not peer_key_id:
+            flash('Peer public key required')
+            return redirect(url_for('share'))
+        peer_row = get_db().execute('SELECT * FROM keys WHERE id = ? AND username = ? AND key_type = ?',
+                                    (peer_key_id, session['username'], 'ECDH-Public')).fetchone()
+        if not peer_row:
+            flash('Peer public key not found')
+            return redirect(url_for('share'))
+        pub_data = (KEYS_DIR / peer_row['stored_name']).read_bytes()
+    else:
+        if 'public_key' not in request.files or request.files['public_key'].filename == '':
+            flash('Peer public key required')
+            return redirect(url_for('share'))
+        pub_data = request.files['public_key'].read()
     priv_data = (KEYS_DIR / row['stored_name']).read_bytes()
     try:
         private_key = serialization.load_pem_private_key(priv_data, password=None)
@@ -1129,11 +1190,13 @@ def share():
         return redirect(url_for('share'))
     d = user_key_dir(session['username'])
     rel, name = save_key(d, f"shared_{row['name']}.key", derived)
-    get_db().execute('INSERT INTO keys (username, name, key_type, stored_name, created_at) VALUES (?, ?, ?, ?, ?)',
-                     (session['username'], f"shared-{row['name']}", 'AES-256-Shared', rel, now()))
-    get_db().commit()
+    db = get_db()
+    db.execute('INSERT INTO keys (username, name, key_type, stored_name, created_at) VALUES (?, ?, ?, ?, ?)',
+               (session['username'], f"shared-{row['name']}", 'AES-256-Shared', rel, now()))
+    db.commit()
+    key_id = db.execute('SELECT id FROM keys WHERE stored_name = ?', (rel,)).fetchone()['id']
     flash('Shared key derived and saved')
-    return redirect(url_for('keys'))
+    return redirect(url_for('view_key', key_id=key_id))
 
 
 if __name__ == '__main__':

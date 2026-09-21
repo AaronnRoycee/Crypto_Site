@@ -1,7 +1,18 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>Key Sharing (ECDH)</h2>
-<p class="text-muted">Combine your private key with another user's public key to derive a shared secret that both of you can compute.</p>
+<p class="text-muted">ECDH lets two people create the same shared secret without sending the secret over the network. Each person keeps a private key and shares their public key. When one person's private key is combined with the other person's public key, both sides arrive at the same value.</p>
+<div class="card shadow mb-4">
+    <div class="card-body">
+        <h5 class="card-title">How to use this</h5>
+        <ol>
+            <li>Each person generates an <strong>ECDH</strong> key pair on the Keys page.</li>
+            <li>Each person sends their <strong>public key</strong> to the other person (download the .pem file or use the copy button).</li>
+            <li>On this page, select your own <strong>private key</strong> and the other person's <strong>public key</strong>.</li>
+            <li>The site computes the shared secret and saves it as an AES-256 key you can use to encrypt files.</li>
+        </ol>
+    </div>
+</div>
 <div class="card shadow">
     <div class="card-body">
         <form method="post" enctype="multipart/form-data">
@@ -12,13 +23,43 @@
                     <option value="{{ k.id }}">{{ k.name }}</option>
                     {% endfor %}
                 </select>
+                <p class="form-text text-muted">This key never leaves the site. Only the matching public key is shared.</p>
             </div>
             <div class="mb-3">
+                <label class="form-label">Peer Public Key Source</label>
+                <select name="peer_source" id="psrc" class="form-select" onchange="togglePeer()">
+                    <option value="saved">Use a saved peer public key</option>
+                    <option value="file">Upload a peer public key file</option>
+                </select>
+                <p class="form-text text-muted" id="peer_source_desc"></p>
+            </div>
+            <div class="mb-3" id="peersaved">
+                <label class="form-label">Saved Peer Public Key</label>
+                <select name="peer_key_id" class="form-select">
+                    {% for k in peer_keys %}
+                    <option value="{{ k.id }}">{{ k.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3" id="peerfile" style="display:none">
                 <label class="form-label">Peer Public Key File (.pem)</label>
-                <input type="file" name="public_key" class="form-control" required>
+                <input type="file" name="public_key" class="form-control">
             </div>
             <button type="submit" class="btn btn-primary">Derive Shared Key</button>
         </form>
     </div>
 </div>
+<script>
+const peerSourceDescs = {
+    saved: 'Select a public key that another user has shared with you or that you saved earlier.',
+    file: 'Upload the public key file the other person sent you.'
+};
+function togglePeer() {
+    const src = document.getElementById('psrc').value;
+    document.getElementById('peersaved').style.display = src === 'saved' ? 'block' : 'none';
+    document.getElementById('peerfile').style.display = src === 'file' ? 'block' : 'none';
+    document.getElementById('peer_source_desc').textContent = peerSourceDescs[src] || '';
+}
+togglePeer();
+</script>
 {% endblock %}
