@@ -1,23 +1,48 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>Symmetric Decryption</h2>
-<p class="text-muted">Upload an encrypted .enc file and provide the same key that was used to encrypt it to recover the original file.</p>
+<p class="text-muted">Choose an encrypted .enc file and provide the same key that was used to encrypt it to recover the original file.</p>
 <div class="card shadow">
     <div class="card-body">
         <form method="post" enctype="multipart/form-data">
             <div class="mb-3">
+                <label class="form-label">Encrypted File Source</label>
+                <select name="file_source" id="fsrc" class="form-select" onchange="toggleFile()">
+                    <option value="upload">Upload an encrypted file from my computer</option>
+                    <option value="saved">Choose a saved file from this site</option>
+                </select>
+                <p class="form-text text-muted" id="file_source_desc"></p>
+            </div>
+            <div class="mb-3" id="fileupload">
                 <label class="form-label">Encrypted file (.enc)</label>
-                <input type="file" name="file" class="form-control" required>
+                <input type="file" name="file" class="form-control">
+            </div>
+            <div class="mb-3" id="filesaved" style="display:none">
+                <label class="form-label">Saved File</label>
+                <select name="file_id" class="form-select">
+                    {% for f in files %}
+                    <option value="{{ f.id }}">{{ f.filename }}</option>
+                    {% endfor %}
+                </select>
             </div>
             <div class="mb-3">
                 <label class="form-label">Key Source</label>
                 <select name="key_source" id="ksrc" class="form-select" onchange="toggleKey()">
+                    <option value="saved">Choose a saved key from this site</option>
                     <option value="text">Type a key or passphrase</option>
                     <option value="file">Upload a key file</option>
                 </select>
                 <p class="form-text text-muted" id="key_source_desc"></p>
             </div>
-            <div class="mb-3" id="keytext">
+            <div class="mb-3" id="keysaved">
+                <label class="form-label">Saved Key</label>
+                <select name="key_id" class="form-select">
+                    {% for k in keys %}
+                    <option value="{{ k.id }}">{{ k.name }} ({{ k.key_type }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3" id="keytext" style="display:none">
                 <label class="form-label">Key or Passphrase</label>
                 <input type="text" name="key_text" class="form-control">
             </div>
@@ -30,16 +55,29 @@
     </div>
 </div>
 <script>
+const fileSourceDescs = {
+    upload: 'Select the encrypted file you want to decrypt from your computer.',
+    saved: 'Pick an encrypted file you already saved on this site.'
+};
 const keySourceDescs = {
+    saved: 'Select the key that matches the encryption.',
     text: 'Enter the passphrase or key that was used to encrypt the file.',
     file: 'Upload the exact key file that was downloaded after encryption.'
 };
+function toggleFile() {
+    const src = document.getElementById('fsrc').value;
+    document.getElementById('fileupload').style.display = src === 'upload' ? 'block' : 'none';
+    document.getElementById('filesaved').style.display = src === 'saved' ? 'block' : 'none';
+    document.getElementById('file_source_desc').textContent = fileSourceDescs[src] || '';
+}
 function toggleKey() {
     const src = document.getElementById('ksrc').value;
+    document.getElementById('keysaved').style.display = src === 'saved' ? 'block' : 'none';
     document.getElementById('keytext').style.display = src === 'text' ? 'block' : 'none';
     document.getElementById('keyfile').style.display = src === 'file' ? 'block' : 'none';
     document.getElementById('key_source_desc').textContent = keySourceDescs[src] || '';
 }
+toggleFile();
 toggleKey();
 </script>
 {% endblock %}

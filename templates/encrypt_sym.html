@@ -1,13 +1,29 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>Symmetric Encryption</h2>
-<p class="text-muted">Upload a file and choose a single secret key. The same key is needed later to decrypt the file.</p>
+<p class="text-muted">Choose a file and a single secret key. The same key is needed later to decrypt the file.</p>
 <div class="card shadow">
     <div class="card-body">
         <form method="post" enctype="multipart/form-data">
             <div class="mb-3">
+                <label class="form-label">File Source</label>
+                <select name="file_source" id="fsrc" class="form-select" onchange="toggleFile()">
+                    <option value="upload">Upload a file from my computer</option>
+                    <option value="saved">Choose a saved file from this site</option>
+                </select>
+                <p class="form-text text-muted" id="file_source_desc"></p>
+            </div>
+            <div class="mb-3" id="fileupload">
                 <label class="form-label">File to encrypt</label>
-                <input type="file" name="file" class="form-control" required>
+                <input type="file" name="file" class="form-control">
+            </div>
+            <div class="mb-3" id="filesaved" style="display:none">
+                <label class="form-label">Saved File</label>
+                <select name="file_id" class="form-select">
+                    {% for f in files %}
+                    <option value="{{ f.id }}">{{ f.filename }}</option>
+                    {% endfor %}
+                </select>
             </div>
             <div class="row">
                 <div class="col-md-4 mb-3">
@@ -39,10 +55,19 @@
                 <select name="key_source" id="ksrc" class="form-select" onchange="toggleKey()">
                     <option value="generate-key">Generate a random key</option>
                     <option value="generate-passphrase">Generate a random passphrase</option>
+                    <option value="saved">Choose a saved key from this site</option>
                     <option value="text">Type a key or passphrase</option>
                     <option value="file">Upload a key file</option>
                 </select>
                 <p class="form-text text-muted" id="key_source_desc"></p>
+            </div>
+            <div class="mb-3" id="keysaved" style="display:none">
+                <label class="form-label">Saved Key</label>
+                <select name="key_id" class="form-select">
+                    {% for k in keys %}
+                    <option value="{{ k.id }}">{{ k.name }} ({{ k.key_type }})</option>
+                    {% endfor %}
+                </select>
             </div>
             <div class="mb-3" id="keytext" style="display:none">
                 <label class="form-label">Key or Passphrase</label>
@@ -89,11 +114,16 @@ const modeDescs = {
         CFB: 'Cipher Feedback. Turns the block cipher into a stream-style cipher.'
     }
 };
+const fileSourceDescs = {
+    upload: 'Select a file from your computer to encrypt.',
+    saved: 'Pick a file you already uploaded or created on this site.'
+};
 const keySourceDescs = {
     'generate-key': 'The site will create a random secret key file you can download after encryption.',
     'generate-passphrase': 'The site will create a random password and convert it into a strong key.',
-    'text': 'Type your own key or passphrase. Longer passwords are stronger.',
-    'file': 'Use a key file you already have, such as one downloaded from this site.'
+    saved: 'Use a key you already saved on this site.',
+    text: 'Type your own key or passphrase. Longer passwords are stronger.',
+    file: 'Use a key file you already have, such as one downloaded from this site.'
 };
 function updateSizes() {
     const algo = document.getElementById('algo').value;
@@ -111,13 +141,22 @@ function updateDescs() {
     const size = parseInt(document.getElementById('size').value);
     const mode = document.getElementById('mode').value;
     const ksrc = document.getElementById('ksrc').value;
+    const fsrc = document.getElementById('fsrc').value;
     document.getElementById('algo_desc').textContent = algoDescs[algo] || '';
     document.getElementById('size_desc').textContent = (sizeDescs[algo] || {})[size] || '';
     document.getElementById('mode_desc').textContent = (modeDescs[algo] || {})[mode] || '';
     document.getElementById('key_source_desc').textContent = keySourceDescs[ksrc] || '';
+    document.getElementById('file_source_desc').textContent = fileSourceDescs[fsrc] || '';
+}
+function toggleFile() {
+    const src = document.getElementById('fsrc').value;
+    document.getElementById('fileupload').style.display = src === 'upload' ? 'block' : 'none';
+    document.getElementById('filesaved').style.display = src === 'saved' ? 'block' : 'none';
+    updateDescs();
 }
 function toggleKey() {
     const src = document.getElementById('ksrc').value;
+    document.getElementById('keysaved').style.display = src === 'saved' ? 'block' : 'none';
     document.getElementById('keytext').style.display = src === 'text' ? 'block' : 'none';
     document.getElementById('keyfile').style.display = src === 'file' ? 'block' : 'none';
     document.getElementById('keymsg').style.display = (src === 'generate-key' || src === 'generate-passphrase') ? 'block' : 'none';
@@ -126,6 +165,7 @@ function toggleKey() {
 document.getElementById('size').addEventListener('change', updateDescs);
 document.getElementById('mode').addEventListener('change', updateDescs);
 updateSizes();
+toggleFile();
 toggleKey();
 </script>
 {% endblock %}
