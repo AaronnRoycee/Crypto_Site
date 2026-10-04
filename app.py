@@ -1,4 +1,5 @@
 import base64, datetime, hashlib, hmac, io, json, mimetypes, os, secrets, shutil, sqlite3, string
+from PIL import Image
 from functools import wraps
 from pathlib import Path
 
@@ -52,7 +53,11 @@ def init_db():
     db.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password_hash TEXT NOT NULL, is_admin INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)')
     db.execute('CREATE TABLE IF NOT EXISTS files (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, filename TEXT NOT NULL, stored_name TEXT NOT NULL, uploaded_at TEXT NOT NULL)')
     db.execute('CREATE TABLE IF NOT EXISTS keys (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, name TEXT NOT NULL, key_type TEXT NOT NULL, stored_name TEXT NOT NULL, created_at TEXT NOT NULL)')
-    db.execute('CREATE TABLE IF NOT EXISTS stego_posts (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, title TEXT, carrier_filename TEXT NOT NULL, message_filename TEXT NOT NULL, stored_name TEXT NOT NULL, s INTEGER NOT NULL, l TEXT NOT NULL, mode TEXT NOT NULL, created_at TEXT NOT NULL)')
+    db.execute('CREATE TABLE IF NOT EXISTS stego_posts (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, title TEXT, carrier_filename TEXT NOT NULL, message_filename TEXT NOT NULL, stored_name TEXT NOT NULL, s INTEGER NOT NULL, l TEXT NOT NULL, mode TEXT NOT NULL, header_offset INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)')
+    try:
+        db.execute('ALTER TABLE stego_posts ADD COLUMN header_offset INTEGER NOT NULL DEFAULT 0')
+    except sqlite3.OperationalError:
+        pass
     db.commit()
     db.close()
 
@@ -1234,6 +1239,18 @@ def share():
     return redirect(url_for('view_key', key_id=key_id))
 
 
+def _image_to_bmp(data, filename):
+    try:
+        img = Image.open(io.BytesIO(data))
+        img = img.convert('RGB')
+        out = io.BytesIO()
+        img.save(out, format='BMP')
+        out.seek(0)
+        return out.read(), f"{Path(filename).stem}.bmp"
+    except Exception:
+        return None, None
+
+
 def _bytes_to_bits(data):
     bits = []
     for b in data:
@@ -1394,16 +1411,22 @@ def stego_hide():
         f = request.files['message']
         message = f.read()
         message_filename = f.filename
+    header_offset = 0
+    bmp_data, bmp_name = _image_to_bmp(carrier, carrier_filename)
+    if bmp_data is not None:
+        carrier = bmp_data
+        carrier_filename = bmp_name
+        header_offset = 54 * 8
     try:
-        modified = stego_embed_message(carrier, message, s, l_values)
+        modified = stego_embed_message(carrier, message, s + header_offset, l_values)
     except Exception as e:
         flash('Steganography failed: ' + str(e))
         return redirect(url_for('stego_hide'))
     d = user_file_dir(session['username'])
     rel, name = save_file(d, f"stego_{carrier_filename}", modified)
     db = get_db()
-    db.execute('INSERT INTO stego_posts (username, title, carrier_filename, message_filename, stored_name, s, l, mode, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-               (session['username'], title, carrier_filename, message_filename, rel, s, l_text, mode, now()))
+    db.execute('INSERT INTO stego_posts (username, title, carrier_filename, message_filename, stored_name, s, l, mode, header_offset, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+               (session['username'], title, carrier_filename, message_filename, rel, s, l_text, mode, header_offset, now()))
     db.commit()
     flash('Message hidden and posted')
     return redirect(url_for('steganography'))
@@ -1430,6 +1453,8 @@ def stego_extract():
     source = request.form.get('source', '')
     carrier = b''
     post_id = None
+    effective_s = s
+    header_offset = 0
     if source == 'post':
         post_id = request.form.get('post_id', '')
         if not post_id:
@@ -1440,13 +1465,15 @@ def stego_extract():
             flash('Post not found')
             return redirect(url_for('stego_extract'))
         carrier = (FILES_DIR / row['stored_name']).read_bytes()
+        header_offset = row['header_offset']
+        effective_s = s + header_offset
     else:
         if 'carrier' not in request.files or request.files['carrier'].filename == '':
             flash('No carrier uploaded')
             return redirect(url_for('stego_extract'))
         carrier = request.files['carrier'].read()
     try:
-        message = stego_extract_message(carrier, s, l_values)
+        message = stego_extract_message(carrier, effective_s, l_values)
     except Exception as e:
         flash('Extraction failed: ' + str(e))
         return redirect(url_for('stego_extract'))

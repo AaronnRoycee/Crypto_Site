@@ -71,8 +71,8 @@
 </div>
 <script>
 const fileSourceDescs = {
-    upload: 'Upload the public carrier file (P). Pictures work best if you target the least-significant bits.',
-    saved: 'Pick a file you already saved on this site to use as the carrier.'
+    upload: 'Upload the public carrier file (P). Image files are converted to 24-bit BMP so the picture is still viewable.',
+    saved: 'Pick a file you already saved on this site to use as the carrier. Images are converted to 24-bit BMP if needed.'
 };
 const msgSourceDescs = {
     text: 'Type the secret message (M) as plain text.',
@@ -100,7 +100,7 @@ function updateDescs() {
     const mode = document.getElementById('mode').value;
     document.getElementById('file_source_desc').textContent = fileSourceDescs[fsrc] || '';
     document.getElementById('msg_source_desc').textContent = msgSourceDescs[msrc] || '';
-    document.getElementById('s_desc').textContent = 'Skip this many bits before hiding the first bit. S=7 starts at the least-significant bit of the first byte.';
+    document.getElementById('s_desc').textContent = 'Skip this many bits before hiding the first bit. S=7 starts at the least-significant bit of the first data byte. For images, the 54-byte BMP header is automatically skipped.';
     document.getElementById('mode_desc').textContent = modeDescs[mode] || '';
     if (mode === 'fixed') {
         document.getElementById('l_desc').textContent = 'The number of bits between each hidden bit. L=8 hides one bit in every byte.';
