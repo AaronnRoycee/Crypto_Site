@@ -15,6 +15,14 @@
             </button>
             <div class="collapse navbar-collapse" id="nav">
                 <ul class="navbar-nav me-auto">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="stegoDropdown" role="button" data-bs-toggle="dropdown">Steganography</a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('steganography') }}">Public Posts</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('stego_hide') }}">Hide a Message</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('stego_extract') }}">Extract a Message</a></li>
+                        </ul>
+                    </li>
                     {% if 'username' in session %}
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a></li>
                     <li class="nav-item dropdown">

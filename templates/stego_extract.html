@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Extract a Message</h2>
+<p class="text-muted">If you know the starting bit (S), spacing (L), and mode (C), you can recover the hidden message from a posted carrier or an uploaded file.</p>
+<div class="card shadow">
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label class="form-label">Carrier Source</label>
+                <select name="source" id="src" class="form-select" onchange="toggleSource()">
+                    <option value="post">Use a public post</option>
+                    <option value="upload">Upload a carrier file</option>
+                </select>
+                <p class="form-text text-muted" id="source_desc"></p>
+            </div>
+            <div class="mb-3" id="postselect">
+                <label class="form-label">Public Post</label>
+                <select name="post_id" id="post_id" class="form-select">
+                    <option value="">Choose a post</option>
+                    {% for p in posts %}
+                    <option value="{{ p.id }}">{{ p.title or 'Untitled' }} ({{ p.carrier_filename }}) by {{ p.username }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3" id="fileupload" style="display:none">
+                <label class="form-label">Carrier File</label>
+                <input type="file" name="carrier" class="form-control">
+            </div>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Starting Bit (S)</label>
+                    <input type="number" name="s" class="form-control" value="7" min="0">
+                    <p class="form-text text-muted">Skip this many bits before reading the first hidden bit. Use the same S that was used to hide the message.</p>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Periodicity (L)</label>
+                    <input type="text" name="l" id="lval" class="form-control" value="8">
+                    <p class="form-text text-muted" id="l_desc">The spacing between hidden bits. Use the same L that was used to hide the message.</p>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Mode (C)</label>
+                    <select name="mode" id="mode" class="form-select" onchange="updateDescs()">
+                        <option value="fixed">Fixed</option>
+                        <option value="variable">Variable</option>
+                    </select>
+                    <p class="form-text text-muted" id="mode_desc"></p>
+                </div>
+            </div>
+            <button type="submit" name="action" value="view" class="btn btn-primary">Extract and View</button>
+            <button type="submit" name="action" value="download" class="btn btn-secondary">Extract and Download</button>
+        </form>
+    </div>
+</div>
+<script>
+const sourceDescs = {
+    post: 'Pick a carrier from the public gallery. You still need S, L, and C to extract the message.',
+    upload: 'Upload a carrier file that contains a hidden message.'
+};
+const modeDescs = {
+    fixed: 'The same L was used for every hidden bit.',
+    variable: 'A repeating list of L values was used, such as 8,16,28.'
+};
+function toggleSource() {
+    const src = document.getElementById('src').value;
+    document.getElementById('postselect').style.display = src === 'post' ? 'block' : 'none';
+    document.getElementById('fileupload').style.display = src === 'upload' ? 'block' : 'none';
+    updateDescs();
+}
+function updateDescs() {
+    const src = document.getElementById('src').value;
+    const mode = document.getElementById('mode').value;
+    document.getElementById('source_desc').textContent = sourceDescs[src] || '';
+    document.getElementById('mode_desc').textContent = modeDescs[mode] || '';
+    if (mode === 'fixed') {
+        document.getElementById('l_desc').textContent = 'Enter a single number, the same L used to hide the message.';
+    } else {
+        document.getElementById('l_desc').textContent = 'Enter the same comma-separated list used to hide the message, such as 8,16,28.';
+    }
+}
+const urlParams = new URLSearchParams(window.location.search);
+const preselect = urlParams.get('post_id');
+if (preselect) {
+    document.getElementById('post_id').value = preselect;
+}
+updateDescs();
+</script>
+{% endblock %}

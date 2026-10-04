@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Extracted Message</h2>
+{% if is_text %}
+<p class="text-muted">The hidden message was recovered as text.</p>
+<div class="mb-3">
+    <textarea class="form-control" rows="8" id="msg" readonly>{{ text }}</textarea>
+    <button type="button" class="btn btn-sm btn-secondary mt-2" onclick="copyText()">Copy</button>
+</div>
+{% else %}
+<p class="text-muted">The hidden message was recovered but it is not printable text. It may be an image, audio, document, or other binary file.</p>
+{% endif %}
+{% if post_id %}
+<form method="post" action="{{ url_for('stego_extract') }}" class="mb-3">
+    <input type="hidden" name="source" value="post">
+    <input type="hidden" name="post_id" value="{{ post_id }}">
+    <input type="hidden" name="s" value="{{ s }}">
+    <input type="hidden" name="l" value="{{ l }}">
+    <input type="hidden" name="mode" value="{{ mode }}">
+    <button type="submit" name="action" value="download" class="btn btn-primary">Download Message</button>
+</form>
+{% else %}
+<p><a href="{{ url_for('stego_extract') }}" class="btn btn-primary">Extract Again</a></p>
+{% endif %}
+<script>
+function copyText() {
+    const el = document.getElementById('msg');
+    el.select();
+    navigator.clipboard.writeText(el.value);
+}
+</script>
+{% endblock %}

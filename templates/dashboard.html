@@ -69,6 +69,17 @@
             </div>
         </div>
     </div>
+    <div class="col-md-4">
+        <div class="card h-100 shadow">
+            <div class="card-body">
+                <h5 class="card-title">Steganography</h5>
+                <p class="card-text">Hide a secret message inside a file and post it publicly.</p>
+                <a href="{{ url_for('steganography') }}" class="btn btn-primary btn-sm">Public Posts</a>
+                <a href="{{ url_for('stego_hide') }}" class="btn btn-secondary btn-sm">Hide</a>
+                <a href="{{ url_for('stego_extract') }}" class="btn btn-success btn-sm">Extract</a>
+            </div>
+        </div>
+    </div>
     {% if is_admin %}
     <div class="col-md-4">
         <div class="card h-100 shadow">

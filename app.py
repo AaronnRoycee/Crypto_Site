@@ -1,4 +1,4 @@
-import base64, datetime, hashlib, hmac, json, os, secrets, shutil, sqlite3, string
+import base64, datetime, hashlib, hmac, io, json, mimetypes, os, secrets, shutil, sqlite3, string
 from functools import wraps
 from pathlib import Path
 
@@ -52,6 +52,7 @@ def init_db():
     db.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password_hash TEXT NOT NULL, is_admin INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)')
     db.execute('CREATE TABLE IF NOT EXISTS files (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, filename TEXT NOT NULL, stored_name TEXT NOT NULL, uploaded_at TEXT NOT NULL)')
     db.execute('CREATE TABLE IF NOT EXISTS keys (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, name TEXT NOT NULL, key_type TEXT NOT NULL, stored_name TEXT NOT NULL, created_at TEXT NOT NULL)')
+    db.execute('CREATE TABLE IF NOT EXISTS stego_posts (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, title TEXT, carrier_filename TEXT NOT NULL, message_filename TEXT NOT NULL, stored_name TEXT NOT NULL, s INTEGER NOT NULL, l TEXT NOT NULL, mode TEXT NOT NULL, created_at TEXT NOT NULL)')
     db.commit()
     db.close()
 
@@ -1231,6 +1232,238 @@ def share():
     key_id = db.execute('SELECT id FROM keys WHERE stored_name = ?', (rel,)).fetchone()['id']
     flash('Shared key derived and saved')
     return redirect(url_for('view_key', key_id=key_id))
+
+
+def _bytes_to_bits(data):
+    bits = []
+    for b in data:
+        for i in range(7, -1, -1):
+            bits.append((b >> i) & 1)
+    return bits
+
+
+def _bits_to_bytes(bits):
+    while len(bits) % 8:
+        bits.append(0)
+    out = bytearray()
+    for i in range(0, len(bits), 8):
+        byte = 0
+        for j in range(8):
+            byte = (byte << 1) | bits[i + j]
+        out.append(byte)
+    return bytes(out)
+
+
+def _parse_l_values(text, mode):
+    if mode == 'fixed':
+        return [int(text)]
+    if mode == 'variable':
+        return [int(x.strip()) for x in text.split(',') if x.strip()]
+    raise ValueError('Unknown mode')
+
+
+def _validate_l_values(values):
+    if not values:
+        raise ValueError('L must be at least one positive integer')
+    if any(x < 1 for x in values):
+        raise ValueError('L values must be positive')
+
+
+def stego_embed_message(carrier, message, s, l_values):
+    carrier_bits = _bytes_to_bits(carrier)
+    if s < 0 or s >= len(carrier_bits):
+        raise ValueError('Start bit out of range')
+    length = len(message) * 8
+    length_bits = _bytes_to_bits(length.to_bytes(8, 'big'))
+    payload_bits = length_bits + _bytes_to_bits(message)
+    pos = s
+    li = 0
+    for pb in payload_bits:
+        if pos >= len(carrier_bits):
+            raise ValueError('Carrier too small for message')
+        carrier_bits[pos] = pb
+        pos += l_values[li % len(l_values)]
+        li += 1
+    return _bits_to_bytes(carrier_bits)
+
+
+def stego_extract_message(carrier, s, l_values):
+    carrier_bits = _bytes_to_bits(carrier)
+    if s < 0 or s >= len(carrier_bits):
+        raise ValueError('Start bit out of range')
+    pos = s
+    li = 0
+    length_bits = []
+    for _ in range(64):
+        if pos >= len(carrier_bits):
+            raise ValueError('Carrier too small')
+        length_bits.append(carrier_bits[pos])
+        pos += l_values[li % len(l_values)]
+        li += 1
+    length = int.from_bytes(_bits_to_bytes(length_bits), 'big')
+    msg_bits = []
+    for _ in range(length):
+        if pos >= len(carrier_bits):
+            raise ValueError('Carrier too small')
+        msg_bits.append(carrier_bits[pos])
+        pos += l_values[li % len(l_values)]
+        li += 1
+    return _bits_to_bytes(msg_bits)
+
+
+@app.route('/steganography')
+def steganography():
+    rows = get_db().execute('SELECT * FROM stego_posts ORDER BY created_at DESC').fetchall()
+    return render_template('steganography.html', posts=rows)
+
+
+@app.route('/steganography/view/<int:post_id>')
+def stego_view(post_id):
+    row = get_db().execute('SELECT * FROM stego_posts WHERE id = ?', (post_id,)).fetchone()
+    if not row:
+        abort(404)
+    p = FILES_DIR / row['stored_name']
+    if not p.exists():
+        abort(404)
+    mimetype, _ = mimetypes.guess_type(row['carrier_filename'])
+    return send_file(str(p), mimetype=mimetype, as_attachment=False)
+
+
+@app.route('/steganography/download/<int:post_id>')
+def stego_download(post_id):
+    row = get_db().execute('SELECT * FROM stego_posts WHERE id = ?', (post_id,)).fetchone()
+    if not row:
+        abort(404)
+    p = FILES_DIR / row['stored_name']
+    if not p.exists():
+        abort(404)
+    return send_file(str(p), as_attachment=True, download_name=row['carrier_filename'])
+
+
+@app.route('/steganography/hide', methods=['GET', 'POST'])
+@login_required
+def stego_hide():
+    if request.method == 'GET':
+        files = get_db().execute('SELECT * FROM files WHERE username = ? ORDER BY uploaded_at DESC', (session['username'],)).fetchall()
+        return render_template('stego_hide.html', files=files)
+    title = request.form.get('title', '').strip()
+    try:
+        s = int(request.form.get('s', '0'))
+    except ValueError:
+        flash('Starting bit must be an integer')
+        return redirect(url_for('stego_hide'))
+    l_text = request.form.get('l', '').strip()
+    mode = request.form.get('mode', 'fixed')
+    try:
+        l_values = _parse_l_values(l_text, mode)
+        _validate_l_values(l_values)
+    except Exception as e:
+        flash('Invalid L value: ' + str(e))
+        return redirect(url_for('stego_hide'))
+    file_source = request.form.get('file_source', '')
+    carrier = b''
+    carrier_filename = 'carrier'
+    if file_source == 'saved':
+        file_id = request.form.get('file_id', '')
+        if not file_id:
+            flash('No carrier selected')
+            return redirect(url_for('stego_hide'))
+        file_row = get_db().execute('SELECT * FROM files WHERE id = ? AND username = ?', (file_id, session['username'])).fetchone()
+        if not file_row:
+            flash('Carrier file not found')
+            return redirect(url_for('stego_hide'))
+        carrier = (FILES_DIR / file_row['stored_name']).read_bytes()
+        carrier_filename = file_row['filename']
+    else:
+        if 'carrier' not in request.files or request.files['carrier'].filename == '':
+            flash('No carrier uploaded')
+            return redirect(url_for('stego_hide'))
+        f = request.files['carrier']
+        carrier = f.read()
+        carrier_filename = f.filename
+    msg_source = request.form.get('msg_source', '')
+    message = b''
+    message_filename = 'message.txt'
+    if msg_source == 'text':
+        text = request.form.get('msg_text', '')
+        message = text.encode()
+    else:
+        if 'message' not in request.files or request.files['message'].filename == '':
+            flash('No message uploaded')
+            return redirect(url_for('stego_hide'))
+        f = request.files['message']
+        message = f.read()
+        message_filename = f.filename
+    try:
+        modified = stego_embed_message(carrier, message, s, l_values)
+    except Exception as e:
+        flash('Steganography failed: ' + str(e))
+        return redirect(url_for('stego_hide'))
+    d = user_file_dir(session['username'])
+    rel, name = save_file(d, f"stego_{carrier_filename}", modified)
+    db = get_db()
+    db.execute('INSERT INTO stego_posts (username, title, carrier_filename, message_filename, stored_name, s, l, mode, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+               (session['username'], title, carrier_filename, message_filename, rel, s, l_text, mode, now()))
+    db.commit()
+    flash('Message hidden and posted')
+    return redirect(url_for('steganography'))
+
+
+@app.route('/steganography/extract', methods=['GET', 'POST'])
+def stego_extract():
+    if request.method == 'GET':
+        posts = get_db().execute('SELECT id, title, carrier_filename, username FROM stego_posts ORDER BY created_at DESC').fetchall()
+        return render_template('stego_extract.html', posts=posts)
+    try:
+        s = int(request.form.get('s', '0'))
+    except ValueError:
+        flash('Starting bit must be an integer')
+        return redirect(url_for('stego_extract'))
+    l_text = request.form.get('l', '').strip()
+    mode = request.form.get('mode', 'fixed')
+    try:
+        l_values = _parse_l_values(l_text, mode)
+        _validate_l_values(l_values)
+    except Exception as e:
+        flash('Invalid L value: ' + str(e))
+        return redirect(url_for('stego_extract'))
+    source = request.form.get('source', '')
+    carrier = b''
+    post_id = None
+    if source == 'post':
+        post_id = request.form.get('post_id', '')
+        if not post_id:
+            flash('No post selected')
+            return redirect(url_for('stego_extract'))
+        row = get_db().execute('SELECT * FROM stego_posts WHERE id = ?', (post_id,)).fetchone()
+        if not row:
+            flash('Post not found')
+            return redirect(url_for('stego_extract'))
+        carrier = (FILES_DIR / row['stored_name']).read_bytes()
+    else:
+        if 'carrier' not in request.files or request.files['carrier'].filename == '':
+            flash('No carrier uploaded')
+            return redirect(url_for('stego_extract'))
+        carrier = request.files['carrier'].read()
+    try:
+        message = stego_extract_message(carrier, s, l_values)
+    except Exception as e:
+        flash('Extraction failed: ' + str(e))
+        return redirect(url_for('stego_extract'))
+    action = request.form.get('action', 'view')
+    if action == 'download':
+        return send_file(io.BytesIO(message), as_attachment=True, download_name='extracted_message')
+    text = ''
+    is_text = False
+    try:
+        if len(message) < 100000:
+            text = message.decode('utf-8')
+            is_text = True
+    except Exception:
+        pass
+    if source == 'post':
+        return render_template('stego_result.html', message=message, text=text, is_text=is_text, post_id=post_id, s=s, l=l_text, mode=mode)
+    return render_template('stego_result.html', message=message, text=text, is_text=is_text)
 
 
 if __name__ == '__main__':

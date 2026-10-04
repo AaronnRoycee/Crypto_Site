@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Hide a Message</h2>
+<p class="text-muted">Steganography hides a secret message inside a carrier file. The carrier is posted publicly, but only someone with the right S, L, and C values can recover the message.</p>
+<div class="card shadow">
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label class="form-label">Post Title (optional)</label>
+                <input type="text" name="title" class="form-control" placeholder="My secret picture">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Carrier File Source</label>
+                <select name="file_source" id="fsrc" class="form-select" onchange="toggleFile()">
+                    <option value="upload">Upload a carrier file from my computer</option>
+                    <option value="saved">Choose a saved file from this site</option>
+                </select>
+                <p class="form-text text-muted" id="file_source_desc"></p>
+            </div>
+            <div class="mb-3" id="fileupload">
+                <label class="form-label">Carrier File (P)</label>
+                <input type="file" name="carrier" class="form-control">
+            </div>
+            <div class="mb-3" id="filesaved" style="display:none">
+                <label class="form-label">Saved File</label>
+                <select name="file_id" class="form-select">
+                    {% for f in files %}
+                    <option value="{{ f.id }}">{{ f.filename }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Message Source</label>
+                <select name="msg_source" id="msrc" class="form-select" onchange="toggleMsg()">
+                    <option value="text">Type the secret message</option>
+                    <option value="upload">Upload a message file</option>
+                </select>
+                <p class="form-text text-muted" id="msg_source_desc"></p>
+            </div>
+            <div class="mb-3" id="msgtext">
+                <label class="form-label">Secret Message (M)</label>
+                <textarea name="msg_text" class="form-control" rows="4"></textarea>
+            </div>
+            <div class="mb-3" id="msgupload" style="display:none">
+                <label class="form-label">Message File</label>
+                <input type="file" name="message" class="form-control">
+            </div>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Starting Bit (S)</label>
+                    <input type="number" name="s" class="form-control" value="7" min="0">
+                    <p class="form-text text-muted" id="s_desc"></p>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Periodicity (L)</label>
+                    <input type="text" name="l" id="lval" class="form-control" value="8">
+                    <p class="form-text text-muted" id="l_desc"></p>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Mode (C)</label>
+                    <select name="mode" id="mode" class="form-select" onchange="updateDescs()">
+                        <option value="fixed">Fixed</option>
+                        <option value="variable">Variable</option>
+                    </select>
+                    <p class="form-text text-muted" id="mode_desc"></p>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Hide and Post</button>
+        </form>
+    </div>
+</div>
+<script>
+const fileSourceDescs = {
+    upload: 'Upload the public carrier file (P). Pictures work best if you target the least-significant bits.',
+    saved: 'Pick a file you already saved on this site to use as the carrier.'
+};
+const msgSourceDescs = {
+    text: 'Type the secret message (M) as plain text.',
+    upload: 'Upload any file as the secret message, such as a text, image, or document.'
+};
+const modeDescs = {
+    fixed: 'Use the same L for every hidden bit. Enter one number, such as 8.',
+    variable: 'Cycle through a list of L values. Enter them separated by commas, such as 8,16,28.'
+};
+function toggleFile() {
+    const src = document.getElementById('fsrc').value;
+    document.getElementById('fileupload').style.display = src === 'upload' ? 'block' : 'none';
+    document.getElementById('filesaved').style.display = src === 'saved' ? 'block' : 'none';
+    updateDescs();
+}
+function toggleMsg() {
+    const src = document.getElementById('msrc').value;
+    document.getElementById('msgtext').style.display = src === 'text' ? 'block' : 'none';
+    document.getElementById('msgupload').style.display = src === 'upload' ? 'block' : 'none';
+    updateDescs();
+}
+function updateDescs() {
+    const fsrc = document.getElementById('fsrc').value;
+    const msrc = document.getElementById('msrc').value;
+    const mode = document.getElementById('mode').value;
+    document.getElementById('file_source_desc').textContent = fileSourceDescs[fsrc] || '';
+    document.getElementById('msg_source_desc').textContent = msgSourceDescs[msrc] || '';
+    document.getElementById('s_desc').textContent = 'Skip this many bits before hiding the first bit. S=7 starts at the least-significant bit of the first byte.';
+    document.getElementById('mode_desc').textContent = modeDescs[mode] || '';
+    if (mode === 'fixed') {
+        document.getElementById('l_desc').textContent = 'The number of bits between each hidden bit. L=8 hides one bit in every byte.';
+    } else {
+        document.getElementById('l_desc').textContent = 'A comma-separated list of L values that repeat, such as 8,16,28.';
+    }
+}
+toggleFile();
+toggleMsg();
+</script>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Public Steganography Posts</h2>
+<p class="text-muted">Anyone can view these posted carriers. The hidden message is not visible without the correct starting bit (S), spacing (L), and mode (C).</p>
+<div class="alert alert-info">
+    <strong>Finding the message with only L</strong>
+    <p class="mb-0">If someone knows only L, they would still need to try every possible starting bit S and guess whether L is fixed or part of a variable pattern C. They would also have to recognize the extracted bytes as a real message. A small carrier or a simple L makes guessing easier, but changing S, using a variable L list, or starting with a large S inside the file makes the search much harder.</p>
+</div>
+{% if posts %}
+<div class="row g-4">
+{% for post in posts %}
+{% set ext = post.carrier_filename.rsplit('.', 1)[-1].lower() %}
+{% set is_image = ext in ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg'] %}
+<div class="col-md-6 col-lg-4">
+    <div class="card shadow h-100">
+        <div class="card-body">
+            <h5 class="card-title">{{ post.title or 'Untitled post' }}</h5>
+            <p class="card-text"><small class="text-muted">Posted by {{ post.username }} on {{ post.created_at }}</small></p>
+            {% if is_image %}
+            <img src="{{ url_for('stego_view', post_id=post.id) }}" class="img-fluid rounded mb-3" style="max-height:250px" alt="Posted carrier">
+            {% else %}
+            <p class="text-muted">This carrier is not an image. Use the download button to save it.</p>
+            {% endif %}
+            <a href="{{ url_for('stego_view', post_id=post.id) }}" class="btn btn-sm btn-info">View</a>
+            <a href="{{ url_for('stego_download', post_id=post.id) }}" class="btn btn-sm btn-success">Download</a>
+            <a href="{{ url_for('stego_extract') }}?post_id={{ post.id }}" class="btn btn-sm btn-secondary">Try to Extract</a>
+        </div>
+    </div>
+</div>
+{% endfor %}
+</div>
+{% else %}
+<p>No public posts yet.</p>
+{% endif %}
+{% endblock %}
